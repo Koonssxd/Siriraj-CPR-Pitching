@@ -2,26 +2,28 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Siriraj CPR AR - Pitching Demo</title>
+    <title>Siriraj Markerless AR CPR Trainer</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
     
-    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <!-- ดึง A-Frame เวอร์ชั่นเสถียรสำหรับ WebXR -->
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     
     <style>
-      body { font-family: 'Helvetica Neue', Arial, sans-serif; margin: 0; overflow: hidden; }
+      body { font-family: 'Helvetica Neue', Arial, sans-serif; user-select: none; }
       
-      #instruction {
+      #instruction-banner {
         position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-        background: rgba(0, 0, 0, 0.85); color: #fff; padding: 12px 20px;
-        border-radius: 25px; text-align: center; z-index: 9999; width: 80%; max-width: 350px; font-size: 14px;
+        background: rgba(0, 0, 0, 0.85); color: #fff; padding: 15px 20px;
+        border-radius: 12px; text-align: center; z-index: 9999; width: 85%;
+        max-width: 400px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); font-size: 14px;
       }
 
-      #pin-btn {
+      /* ปุ่มกดวางหุ่นที่จะโผล่มาเมื่อเจอพื้น */
+      #place-btn {
         position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
-        z-index: 9999; padding: 16px 35px; background: #00E676; color: black;
-        font-weight: bold; font-size: 16px; border: none; border-radius: 30px;
-        box-shadow: 0 5px 15px rgba(0,230,118,0.4); cursor: pointer;
+        z-index: 9999; display: none; padding: 16px 30px; background: #00E676;
+        color: #000; font-weight: bold; font-size: 16px; border: none;
+        border-radius: 30px; box-shadow: 0 5px 15px rgba(0,230,118,0.4); cursor: pointer;
       }
 
       #control-panel {
@@ -36,13 +38,59 @@
       }
       #cprBtn { background: #D32F2F; }
     </style>
+
+    <script>
+      // สคริปต์ลงทะเบียนระบบฝังตัวขับเคลื่อนตรวจจับพื้น (WebXR Hit-Test)
+      window.lastHitPosition = null;
+      window.isPlaced = false;
+
+      AFRAME.registerComponent('ar-hit-test', {
+        init: function () {
+          this.xrHitTestSource = null;
+          this.el.sceneEl.renderer.xr.addEventListener('sessionstart', async () => {
+            let session = this.el.sceneEl.renderer.xr.getSession();
+            if (session.mode !== 'immersive-ar') return;
+            let viewerSpace = await session.requestReferenceSpace('viewer');
+            this.xrHitTestSource = await session.requestHitTestSource({ space: viewerSpace });
+          });
+        },
+        tick: function () {
+          if (!this.el.sceneEl.is('ar-mode') || window.isPlaced) return;
+          let frame = this.el.sceneEl.frame;
+          let session = this.el.sceneEl.renderer.xr.getSession();
+          if (!frame || !session || !this.xrHitTestSource) return;
+          
+          let refSpace = this.el.sceneEl.renderer.xr.getReferenceSpace();
+          let hitTestResults = frame.getHitTestResults(this.xrHitTestSource);
+          
+          if (hitTestResults.length > 0) {
+            let hit = hitTestResults[0];
+            let pose = hit.getPose(refSpace);
+            
+            // บันทึกค่าพิกัดพื้นปัจจุบันไว้
+            window.lastHitPosition = pose.transform.position;
+            
+            // เลื่อนวงแหวนสีเขียวไปตามพื้น
+            this.el.setAttribute('position', pose.transform.position);
+            this.el.setAttribute('visible', 'true');
+            
+            // เปิดปุ่มให้กดวางหุ่นได้
+            document.querySelector('#place-btn').style.display = 'block';
+            document.querySelector('#instruction-banner').innerHTML = "👍 เจอพื้นแล้ว! แพนกล้องหาจุดที่ชอบ แล้วกดปุ่มด้านล่าง";
+          }
+        }
+      });
+    </script>
   </head>
   
-  <body>
+  <body style="margin: 0px; overflow: hidden;">
 
-    <div id="instruction">หันกล้องไปที่พื้น/โต๊ะ แล้วกดปุ่มปักหมุดสีเขียวได้เลย</div>
+    <div id="instruction-banner">
+      <strong>ขั้นตอนที่ 1:</strong> กดปุ่ม <b>"Enter AR"</b> มุมขวาล่าง <br>จากนั้นถือมือถือขยับส่องไปที่พื้นช้าๆ เพื่อให้กล้องจับระนาบครับ
+    </div>
     
-    <button id="pin-btn" onclick="pinToWorld()">📍 ปักหมุดวางร่างผู้ป่วย</button>
+    <!-- ปุ่มกดวางร่างผู้ป่วย -->
+    <button id="place-btn" onclick="placePatient()">📍 วางร่างผู้ป่วยตรงนี้</button>
     
     <div id="control-panel">
       <button class="btn" onclick="alert('✔️ พื้นที่ปลอดภัย ไม่มีสิ่งกีดขวางรอบตัวผู้ป่วย')">1. ตรวจความปลอดภัย</button>
@@ -51,52 +99,51 @@
       <button class="btn" id="cprBtn" onclick="toggleCPRAnimation()">4. เริ่มปั๊มหัวใจ (110 BPM)</button>
     </div>
 
-    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;">
-      
-      <a-entity camera>
-        <a-entity id="patient-holder" position="0 -0.5 -1.2" rotation="20 0 0">
-          
-          <a-entity id="patient-body">
-            <a-box position="0 0.1 0" width="0.4" height="0.2" depth="0.6" material="color: #2980b9;"></a-box>
-            <a-box position="0 0.1 0.5" width="0.38" height="0.18" depth="0.4" material="color: #7f8c8d;"></a-box>
-            <a-sphere position="0 0.1 -0.45" radius="0.12" material="color: #f39c12;"></a-sphere>
-            
-            <a-cylinder id="cpr-target" position="0 0.21 -0.05" radius="0.1" height="0.02" material="color: #c0392b;"
-                        animation="property: scale; to: 1 0.2 1; dir: alternate; dur: 272; loop: true; startEvents: startBeat; pauseEvents: stopBeat">
-            </a-cylinder>
-            <a-text value="PUSH HERE" position="0 0.24 -0.05" rotation="-90 0 0" align="center" color="#FFFFFF" scale="0.35 0.35 0.35"></a-text>
-          </a-entity>
+    <!-- ฉากโลก AR -->
+    <a-scene webxr="optionalFeatures: hit-test;">
+      <a-entity camera position="0 1.6 0"></a-entity>
 
-        </a-entity>
+      <!-- วงแหวนเป้าเล็งที่จะขยับตามพื้นผิว -->
+      <a-entity id="reticle" ar-hit-test visible="false"
+                material="color: #00FF00; shader: flat; opacity: 0.8" 
+                geometry="primitive: ring; radiusInner: 0.12; radiusOuter: 0.18" rotation="-90 0 0">
+      </a-entity>
+      
+      <!-- โมเดลร่างผู้ป่วยจำลอง -->
+      <a-entity id="patient-body" visible="false">
+        <a-box position="0 0.1 0" width="0.4" height="0.2" depth="0.6" material="color: #2980b9;"></a-box>
+        <a-box position="0 0.1 0.5" width="0.38" height="0.18" depth="0.4" material="color: #7f8c8d;"></a-box>
+        <a-sphere position="0 0.1 -0.45" radius="0.12" material="color: #f39c12;"></a-sphere>
+        
+        <!-- เป้าหน้าอกสีแดงที่ขยับยุบลงได้ -->
+        <a-cylinder id="cpr-target" position="0 0.21 -0.05" radius="0.1" height="0.02" material="color: #c0392b;"
+                    animation="property: scale; to: 1 0.2 1; dir: alternate; dur: 272; loop: true; startEvents: startBeat; pauseEvents: stopBeat">
+        </a-cylinder>
+        <a-text value="PUSH HERE" position="0 0.24 -0.05" rotation="-90 0 0" align="center" color="#FFFFFF" scale="0.35 0.35 0.35"></a-text>
       </a-entity>
 
-      <a-entity light="type: ambient; intensity: 1.0;"></a-entity>
+      <a-entity light="type: ambient; intensity: 0.8;"></a-entity>
     </a-scene>
 
     <script>
       let isCprActive = false;
 
-      // ฟังก์ชันปลดล็อกหุ่นให้อยู่กับพิกัดโลก ไม่ลอยตามกล้องอีกต่อไป
-      function pinToWorld() {
-        const holder = document.querySelector('#patient-holder');
-        const scene = document.querySelector('a-scene');
-        const patientBody = document.querySelector('#patient-body');
-        
-        // ดึงพิกัดตำแหน่งและมุมหมุนล่าสุดที่ลอยอยู่กลางจอ
-        const worldPos = new THREE.Vector3();
-        patientBody.object3D.getWorldPosition(worldPos);
-        
-        // ย้ายตัวหุ่นออกจากกล้อง มาแปะไว้ที่ตัวฉากหลังโลกแทน
-        scene.object3D.add(patientBody.object3D);
-        patientBody.object3D.position.copy(worldPos);
-        patientBody.object3D.rotation.set(0, 0, 0); // วางราบกับพื้นโลก
-        
-        // สลับ UI
-        document.querySelector('#pin-btn').style.display = 'none';
-        document.querySelector('#instruction').style.display = 'none';
-        document.querySelector('#control-panel').style.display = 'flex';
+      // ฟังก์ชันเมื่อกดวางร่างผู้ป่วย
+      function placePatient() {
+        if (window.lastHitPosition) {
+          const patientEl = document.querySelector('#patient-body');
+          patientEl.setAttribute('position', window.lastHitPosition);
+          patientEl.setAttribute('visible', 'true');
+          
+          window.isPlaced = true;
+          document.querySelector('#reticle').setAttribute('visible', 'false');
+          document.querySelector('#place-btn').style.display = 'none';
+          document.querySelector('#instruction-banner').style.display = 'none';
+          document.querySelector('#control-panel').style.display = 'flex';
+        }
       }
 
+      // ฟังก์ชันเปิด/ปิด จังหวะปั๊มหัวใจ
       function toggleCPRAnimation() {
         const cprTarget = document.querySelector('#cpr-target');
         const cprBtn = document.querySelector('#cprBtn');

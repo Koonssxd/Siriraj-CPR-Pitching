@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Siriraj Markerless AR CPR Concept</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    
+    <!-- ดึง A-Frame เวอร์ชั่นล่าสุดที่รองรับ WebXR Hit-test เต็มรูปแบบ -->
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    
+    <style>
+      /* สไตล์ตกแต่ง UI ให้ดูทันสมัยและเป็นทางการ */
+      body { font-family: 'Helvetica Neue', Arial, sans-serif; }
+      
+      #instruction-banner {
+        position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.85); color: #fff; padding: 15px 20px;
+        border-radius: 12px; text-align: center; z-index: 9999; width: 85%;
+        max-width: 400px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); font-size: 14px; line-height: 1.4;
+      }
+
+      #control-panel {
+        position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+        z-index: 9999; display: none; flex-direction: column; width: 90%; max-width: 360px;
+      }
+
+      .btn {
+        padding: 14px; margin: 6px 0; background: #00796B; color: white;
+        border: none; border-radius: 30px; font-size: 15px; font-weight: bold;
+        cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.3); transition: all 0.2s;
+      }
+      .btn:active { transform: scale(0.98); opacity: 0.9; }
+      #cprBtn { background: #D32F2F; } /* ปุ่ม CPR สีแดงเด่นชัด */
+    </style>
+  </head>
+  
+  <body style="margin: 0px; overflow: hidden;">
+
+    <!-- ส่วนที่ 1: แถบคำแนะนำผู้ใช้งาน (จะเปลี่ยนข้อความตามสถานะเกม) -->
+    <div id="instruction-banner">
+      <strong>ขั้นตอนที่ 1:</strong> กดปุ่ม <span style="color:#00FF00">"Enter AR"</span> ที่มุมขวาล่างของจอก่อนครับ
+    </div>
+    
+    <!-- ส่วนที่ 2: แผงควบคุมขั้นตอนการช่วยชีวิต (จะปรากฏหลังจากวางร่างผู้ป่วยแล้ว) -->
+    <div id="control-panel">
+      <button class="btn" onclick="triggerStep('✔️ ตรวจความปลอดภัย: พื้นที่รอบผู้ป่วยปลอดภัย ไม่มีกระแสไฟหรือสิ่งกีดขวาง')">1. ตรวจความปลอดภัย</button>
+      <button class="btn" onclick="triggerStep('📢 ตบไหล่เรียก: ตบไหล่ผู้ป่วยทั้งสองข้างแรงๆ คุณๆ! เป็นอย่างไรบ้าง?')">2. ตบไหล่เรียกผู้ป่วย</button>
+      <button class="btn" onclick="triggerStep('📞 โทร 1669: แจ้งทีมแพทย์กู้ชีพ สั่งนำเครื่อง AED มายังที่เกิดเหตุ')">3. โทร 1669 / ขอ AED</button>
+      <button class="btn" id="cprBtn" onclick="toggleCPRAnimation()">4. เริ่มปั๊มหัวใจ (110 BPM)</button>
+    </div>
+
+    <!-- ส่วนที่ 3: ฉากโลก AR (A-Frame Scene) -->
+    <!-- เปิดฟีเจอร์ hit-test เพื่อให้กล้องยิงลำแสงตรวจจับพื้นผิวของโลกจริง -->
+    <a-scene webxr="optionalFeatures: hit-test;">
+      
+      <!-- กล้องมองภาพ -->
+      <a-entity camera position="0 1.6 0"></a-entity>
+
+      <!-- วงแหวนเป้าเล็งสีเขียว (Reticle) สำหรับสแกนหาพื้น -->
+      <!-- ตัวประกอบ ar-hit-test จะทำให้วงแหวนนี้วิ่งไปแปะอยู่บนพื้นผิวโลกจริงโดยอัตโนมัติ -->
+      <a-entity id="reticle" ar-hit-test material="color: #00FF00; shader: flat; opacity: 0.8" 
+                geometry="primitive: ring; radiusInner: 0.15; radiusOuter: 0.2" rotation="-90 0 0">
+      </a-entity>
+      
+      <!-- ร่างผู้ป่วยจำลอง 3D (ซ่อนไว้ก่อน จนกว่าจะกดวางบนพื้น) -->
+      <a-entity id="patient-body" visible="false">
+        
+        <!-- ส่วนลำตัว (เสื้อน้ำเงิน) -->
+        <a-box position="0 0.1 0" width="0.4" height="0.2" depth="0.6" material="color: #2980b9; roughness: 0.5;"></a-box>
+        
+        <!-- ส่วนกางเกง (สีเทา) -->
+        <a-box position="0 0.1 0.5" width="0.38" height="0.18" depth="0.4" material="color: #7f8c8d;"></a-box>
+        
+        <!-- ส่วนหัว (สีเนื้อจำลอง) -->
+        <a-sphere position="0 0.1 -0.45" radius="0.12" material="color: #f39c12;"></a-sphere>
+        
+        <!-- เป้าหมายวงกลมสีแดงตรงกลางอก (จุดกด CPR) -->
+        <!-- เราใส่ระบบ Animation ยุบขยายตัวในแนวดิ่ง (scale ยุบตัวลง 0.2 เท่าในแนวแกน Y) เพื่อจำลองจังหวะการกดหน้าอก -->
+        <a-cylinder id="cpr-target" position="0 0.21 -0.05" radius="0.1" height="0.02" material="color: #c0392b;"
+                    animation="property: scale; to: 1 0.2 1; dir: alternate; dur: 270; loop: true; startEvents: startBeat; pauseEvents: stopBeat">
+        </a-cylinder>
+        
+        <!-- ตัวหนังสือลอยบอกตำแหน่งบนหน้าอก -->
+        <a-text value="PUSH HERE" position="0 0.24 -0.05" rotation="-90 0 0" align="center" color="#FFFFFF" scale="0.35 0.35 0.35" font="mozillavr"></a-text>
+        
+      </a-entity>
+
+      <!-- ระบบแสงสว่างเพื่อให้โมเดล 3D มีมิติสวยงาม -->
+      <a-entity light="type: ambient; intensity: 0.7;"></a-entity>
+      <a-entity light="type: directional; intensity: 0.6;" position="1 3 1"></a-entity>
+
+    </a-scene>
+
+    <script>
+      const sceneEl = document.querySelector('a-scene');
+      const reticleEl = document.querySelector('#reticle');
+      const patientEl = document.querySelector('#patient-body');
+      const banner = document.querySelector('#instruction-banner');
+      const controlPanel = document.querySelector('#control-panel');
+      const cprTarget = document.querySelector('#cpr-target');
+      const cprBtn = document.querySelector('#cprBtn');
+
+      let isPlaced = false;
+      let isCprActive = false;
+
+      // 1. ตรวจจับเมื่อผู้ใช้งานกดปุ่ม "Enter AR" และระบบกล้องเริ่มทำงาน
+      sceneEl.addEventListener('enter-vr', function () {
+        if (sceneEl.is('ar-mode')) {
+          banner.innerHTML = "<strong>ขั้นตอนที่ 2:</strong> แพนกล้องส่องลงพื้นโล่งๆ <br>เมื่อเห็น <span style='color:#00FF00'><b>วงแหวนสีเขียว</b></span> ปรากฏบนพื้น ให้แตะหน้าจอ 1 ครั้งเพื่อวางร่างผู้ป่วย";
+        }
+      });
+
+      // 2. ระบบดักจับการแตะหน้าจอ เพื่อทำการ "วางร่างผู้ป่วย" ลงตรงตำแหน่งวงแหวนเป้าเล็ง
+      window.addEventListener('click', () => {
+        // ทำงานเฉพาะเมื่ออยู่ในโหมด AR และยังไม่ได้วางร่างผู้ป่วยเท่านั้น
+        if (sceneEl.is('ar-mode') && !isPlaced) {
+          
+          // ดึงพิกัดตำแหน่งปัจจุบันของวงแหวนที่เกาะอยู่บนพื้นโลกจริง
+          const currentPosition = reticleEl.getAttribute('position');
+          
+          if (currentPosition) {
+            // ย้ายร่างผู้ป่วยไปที่ตำแหน่งนั้น และเปิดให้มองเห็น
+            patientEl.setAttribute('position', currentPosition);
+            patientEl.setAttribute('visible', 'true');
+            
+            // ปิดการทำงานและซ่อนวงแหวนเป้าเล็ง
+            reticleEl.setAttribute('ar-hit-test', 'enabled: false');
+            reticleEl.setAttribute('visible', 'false');
+            
+            // เปลี่ยนสถานะการวางวัตถุ
+            isPlaced = true;
+            
+            // ปรับเปลี่ยนหน้าจอ UI: ซ่อนแถบคำแนะนำด้านบน และแสดงแผงปุ่มกดกู้ชีพด้านล่างแทน
+            banner.style.display = 'none';
+            controlPanel.style.display = 'flex';
+          }
+        }
+      });
+
+      // 3. ฟังก์ชันแจ้งเตือนแต่ละขั้นตอนการกู้ชีพ
+      function triggerStep(message) {
+        alert(message);
+      }
+
+      // 4. ฟังก์ชันเปิด/ปิด แอนิเมชันปั๊มหัวใจจำลอง (จังหวะ 110 BPM)
+      function toggleCPRAnimation() {
+        if (!isCprActive) {
+          // สั่งให้เป้าสีแดงตรงหน้าอกเริ่มกระพริบ/ยุบตัวตามจังหวะอนิเมชั่น
+          cprTarget.emit('startBeat');
+          cprBtn.innerHTML = "หยุดปั๊มหัวใจ";
+          cprBtn.style.background = "#555555";
+          isCprActive = true;
+        } else {
+          // สั่งหยุดอนิเมชั่น และรีเซ็ตขนาดหน้าอกให้กลับมาเท่าเดิม
+          cprTarget.emit('stopBeat');
+          cprTarget.setAttribute('scale', '1 1 1');
+          cprBtn.innerHTML = "4. เริ่มปั๊มหัวใจ (110 BPM)";
+          cprBtn.style.background = "#D32F2F";
+          isCprActive = false;
+        }
+      }
+    </script>
+  </body>
+</html>

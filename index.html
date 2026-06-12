@@ -13,7 +13,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;
 #cv{position:fixed;inset:0;width:100%;height:100%}
 #ui{position:fixed;inset:0;pointer-events:none}
 
-.brk{position:absolute;width:22px;height:22px;opacity:0;pointer-events:none;transition:opacity .4s}
+.brk{position:absolute;width:22px;height:22px;opacity:0;transition:opacity .4s;pointer-events:none}
 .brk.show{opacity:.6}
 #bk-tl{top:10px;left:10px;border-top:2px solid #00D4FF;border-left:2px solid #00D4FF}
 #bk-tr{top:10px;right:10px;border-top:2px solid #00D4FF;border-right:2px solid #00D4FF}
@@ -33,9 +33,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;
   transform:translateX(-50%);font-size:10px;letter-spacing:3px;opacity:0;
   text-transform:uppercase;background:rgba(0,0,0,.45);
   border:1px solid rgba(0,212,255,.3);border-radius:20px;padding:4px 14px;
-  pointer-events:none;transition:opacity .5s;white-space:nowrap}
+  transition:opacity .5s;white-space:nowrap;pointer-events:none}
 #scene-tag.show{opacity:.85}
-
 #dots{position:absolute;top:max(env(safe-area-inset-top),42px);left:50%;
   transform:translateX(-50%);display:none;gap:6px}
 .dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.25);transition:background .3s}
@@ -45,9 +44,15 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;
   left:0;right:0;text-align:center;padding:0 20px;display:none}
 #fb{font-size:26px;font-weight:900;letter-spacing:2px;min-height:32px;margin-bottom:4px;
   text-shadow:0 1px 8px rgba(0,0,0,.8)}
-#ins{font-size:14px;line-height:1.6;opacity:.95;
-  text-shadow:0 1px 6px rgba(0,0,0,.9);font-weight:600}
+#ins{font-size:14px;line-height:1.6;opacity:.95;font-weight:600;
+  text-shadow:0 1px 6px rgba(0,0,0,.9)}
 #sub{font-size:11px;opacity:.55;margin-top:4px;text-shadow:0 1px 4px rgba(0,0,0,.9)}
+
+#posture{position:absolute;top:max(env(safe-area-inset-top),68px);left:50%;
+  transform:translateX(-50%);font-size:12px;font-weight:800;
+  background:rgba(0,0,0,.5);border-radius:18px;padding:5px 14px;
+  display:none;border:1px solid rgba(255,179,0,.4);white-space:nowrap}
+#posture.good{border-color:rgba(0,255,136,.55);color:#00FF88}
 
 .panel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   width:min(330px,88vw);background:rgba(4,9,20,.93);
@@ -79,6 +84,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;
     <div class="dot" id="d0"></div><div class="dot" id="d1"></div>
     <div class="dot" id="d2"></div><div class="dot" id="d3"></div>
   </div>
+  <div id="posture">🤲 ประสานมือสองข้าง!</div>
   <div id="hud-t">
     <div style="display:flex;gap:7px">
       <div class="st"><div class="sv" id="n-c" style="color:#FF3366">0</div><div class="sl">ครั้ง</div></div>
@@ -103,14 +109,14 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;
     <div style="font-size:12px;opacity:.75;line-height:1.85;text-align:left;
       padding:10px 13px;background:rgba(0,212,255,.05);
       border:1px solid rgba(0,212,255,.12);border-radius:10px;margin-bottom:16px">
-      ✋ <strong>ไม่ต้องแตะจอเลย!</strong><br>
-      📷 ชี้กล้องลงพื้น → ระบบสแกนเอง<br>
-      🖐️ ค้างมือเหนือปุ่ม = เลือก (Air Hover)<br>
-      ❤️ ปั๊มมือขึ้น-ลงจริง = ระบบนับ CPR<br>
-      ⚡ AI ตรวจจับทุกการเคลื่อนไหว
+      ✋ <strong>ไม่ต้องแตะจอเลย</strong><br>
+      📐 Gyroscope ตรวจมุมกล้อง = หาพื้นจริง<br>
+      🌍 ผู้ป่วยยึดกับโลกจริง (World Anchor)<br>
+      🤲 CPR ต้อง<strong>ประสานมือ 2 ข้าง</strong>แบบจริง<br>
+      ⚡ AI ตรวจจับท่าทางทุกขั้นตอน
     </div>
     <button class="btn" id="btn-ar">📷 เริ่ม — เปิดกล้อง AR</button>
-    <button class="btn r" id="btn-demo">🎮 Demo Mode (เมาส์/นิ้วแทนมือ)</button>
+    <button class="btn r" id="btn-demo">🎮 Demo Mode (เมาส์แทนมือ)</button>
   </div>
 
   <div class="panel" id="p-res" style="display:none"><div id="res"></div></div>
@@ -122,74 +128,112 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;
   crossorigin="anonymous" onerror="window._mcf=1"></script>
 
 <script>
-// ════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // CONFIG
-// ════════════════════════════════════════════════════════
-const TOTAL      = 30;      // CPR compressions
-const PERSP      = 0.46;    // floor perspective
-const DWELL_MS   = 1200;    // air-hover hold time
-const SCAN_MS    = 3000;    // floor scan duration
-const PUMP_MIN   = 14;      // min px movement for compression stroke
-const WAVE_NEED  = 4;       // direction changes to count as "เขย่า/โบกมือ"
+// ═══════════════════════════════════════════════════════
+const TOTAL=30, PERSP=0.46, DWELL_MS=1100;
+const PUMP_MIN=13;          // px stroke for compression
+const WAVE_NEED=4;
+const FLOOR_BETA_MIN=28, FLOOR_BETA_MAX=85;  // tilt range = pointing at floor
+const STEADY_MAX=1.6;       // deg/frame movement = "นิ่ง"
+const SCAN_NEED=1800;       // ms of valid floor-pointing to confirm
+const CLASP_DIST_F=0.16;    // two wrists closer than 16% of min(w,h) = clasped
+const ANCHOR_PX_PER_DEG=9;  // world-anchor sensitivity
 
-// ════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // STATE
-// ════════════════════════════════════════════════════════
-let phase='init';   // init|scan|mat|safety0|safety1|safety2|call|cpr|aed|shock|done
-let demo=false;
-let sc=0;
+// ═══════════════════════════════════════════════════════
+let phase='init', demo=false, sc=0;
 
-// patient placement
-let pX=null,pY=null,matStart=null,matScale=0,scanStart=null;
+// placement + world anchor
+let pX=null,pY=null,matStart=null,matScale=0;
+let anchorB=null,anchorG=null;  // orientation at placement
+let offX=0,offY=0;              // world-anchor screen offset
 
-// hand tracking
-let lms=[];           // mediapipe landmarks
-let handX=null,handY=null;   // primary hand position (wrist) in screen px
-let demoX=null,demoY=null;   // demo: pointer position
+// orientation sensor
+let beta=null,gamma=null,prevBeta=null,prevGamma=null,moveRate=99;
+let scanAccum=0,lastScanT=0;
+let sensorOK=false;
 
-// dwell (air hover)
-let dwellTarget=null, dwellStart=0, dwellProg=0;
+// hands
+let lms=[];
+let h1=null,h2=null;     // wrist positions {x,y} of detected hands
+let demoX=null,demoY=null;
+let clasped=false;
 
-// wave detection (safety scene 1: เขย่าตัว)
-let waveDir=0, waveCount=0, lastWX=null;
+// dwell
+let dwellTarget=null,dwellStart=0,dwellProg=0;
 
-// CPR motion detection
-let compr=0, cbpm=0, bwin=[];
-let yHist=[];        // recent wrist Y positions
-let pumpState='up';  // up|down
-let lastPumpT=0, pumpRefY=null;
-let cA=0, inChest=false;
+// wave
+let waveDir=0,waveCount=0,lastWX=null;
 
-// AED
-let aedPlaced=new Set(), aedArmed=false, aedShocked=false;
+// CPR
+let compr=0,cbpm=0,bwin=[];
+let pumpState='up',pumpRefY=null,lastPumpT=0;
+let cA=0,inChest=false;
 
-// misc
-let aCtx=null, dTilt=0, dRoll=0;
+// AED / call
+let aedPlaced=new Set(),aedArmed=false;
+let callSeq=['1','6','6','9'],callIdx=0,callZones=null;
 
-// ════════════════════════════════════════════════════════
+let aCtx=null;
+
+// ═══════════════════════════════════════════════════════
 // DOM
-// ════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 const vid=$('vid'),cv=$('cv'),G=cv.getContext('2d');
-const fbEl=$('fb'),insEl=$('ins'),subEl=$('sub');
+const fbEl=$('fb'),insEl=$('ins'),subEl=$('sub'),postureEl=$('posture');
 function $(x){return document.getElementById(x);}
 function resize(){cv.width=innerWidth;cv.height=innerHeight;}
-resize(); addEventListener('resize',resize);
+resize();addEventListener('resize',resize);
+function setMsg(i,s=''){insEl.textContent=i;subEl.textContent=s;}
+function setFb(t,c){fbEl.textContent=t;fbEl.style.color=c;
+  clearTimeout(fbEl._t);fbEl._t=setTimeout(()=>fbEl.textContent='',800);}
+function setTag(t){const e=$('scene-tag');e.textContent=t;e.className='show';}
+function setDots(i){[0,1,2,3].forEach(k=>$('d'+k).className='dot'+(k<i?' ok':k===i?' on':''));
+  $('dots').style.display='flex';}
+function updHUD(){$('n-s').textContent=sc;$('n-c').textContent=compr;
+  $('n-b').textContent=cbpm||'--';}
 
-function setMsg(ins,sub=''){ insEl.textContent=ins; subEl.textContent=sub; }
-function setFb(t,c){ fbEl.textContent=t; fbEl.style.color=c;
-  clearTimeout(fbEl._t); fbEl._t=setTimeout(()=>fbEl.textContent='',800); }
-function setTag(t){ const e=$('scene-tag'); e.textContent=t; e.className='show'; }
-function setDots(i){ [0,1,2,3].forEach(k=>{
-  $('d'+k).className='dot'+(k<i?' ok':k===i?' on':''); });
-  $('dots').style.display='flex'; }
-function updHUD(){ $('n-s').textContent=sc; $('n-c').textContent=compr;
-  $('n-b').textContent=cbpm||'--'; }
+// Anchored patient position (world-locked)
+function aX(){return pX+offX;}
+function aY(){return pY+offY;}
 
-// ════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // START
-// ════════════════════════════════════════════════════════
-$('btn-ar').onclick=startAR;
+// ═══════════════════════════════════════════════════════
+$('btn-ar').onclick=()=>{ requestSensors(); startAR(); };
 $('btn-demo').onclick=()=>{ demo=true; beginScan(); };
+
+function requestSensors(){
+  // must be inside user gesture for iOS
+  if(typeof DeviceOrientationEvent!=='undefined'&&
+     typeof DeviceOrientationEvent.requestPermission==='function'){
+    DeviceOrientationEvent.requestPermission()
+      .then(r=>{ if(r==='granted') attachOrient(); })
+      .catch(()=>{});
+  } else attachOrient();
+}
+function attachOrient(){
+  addEventListener('deviceorientation',e=>{
+    if(e.beta==null)return;
+    sensorOK=true;
+    prevBeta=beta; prevGamma=gamma;
+    beta=e.beta; gamma=e.gamma;
+    if(prevBeta!=null){
+      moveRate=Math.abs(beta-prevBeta)+Math.abs(gamma-prevGamma||0);
+    }
+    // world anchoring
+    if(anchorB!=null&&phase!=='scan'){
+      offX=-(gamma-anchorG)*ANCHOR_PX_PER_DEG;
+      offY=-(beta-anchorB)*ANCHOR_PX_PER_DEG;
+      // clamp so patient never fully leaves screen
+      const m=Math.min(cv.width,cv.height)*.45;
+      offX=Math.max(-m,Math.min(m,offX));
+      offY=Math.max(-m,Math.min(m,offY));
+    }
+  },{passive:true});
+}
 
 async function startAR(){
   $('p-start').style.display='none';
@@ -201,7 +245,6 @@ async function startAR(){
     vid.play();
     initMP();
   }catch(e){ demo=true; }
-  startOrient();
   beginScan();
 }
 
@@ -213,12 +256,16 @@ function initMP(){
       minDetectionConfidence:.5,minTrackingConfidence:.5});
     h.onResults(r=>{
       lms=r.multiHandLandmarks||[];
-      if(lms.length){
-        // use palm center (avg of wrist+middle knuckle) as pointer
-        const lm=lms[0];
-        handX=(lm[0].x+lm[9].x)/2*cv.width;
-        handY=(lm[0].y+lm[9].y)/2*cv.height;
-      } else { handX=null; handY=null; }
+      h1=null;h2=null;
+      if(lms[0]){const lm=lms[0];
+        h1={x:(lm[0].x+lm[9].x)/2*cv.width,y:(lm[0].y+lm[9].y)/2*cv.height};}
+      if(lms[1]){const lm=lms[1];
+        h2={x:(lm[0].x+lm[9].x)/2*cv.width,y:(lm[0].y+lm[9].y)/2*cv.height};}
+      // clasped = both hands close together
+      if(h1&&h2){
+        const d=Math.hypot(h1.x-h2.x,h1.y-h2.y);
+        clasped=d<Math.min(cv.width,cv.height)*CLASP_DIST_F;
+      } else clasped=false;
     });
     if(window._mcf||typeof Camera==='undefined')return;
     new Camera(vid,{onFrame:async()=>{try{await h.send({image:vid});}catch(_){}}
@@ -226,74 +273,91 @@ function initMP(){
   }catch(e){}
 }
 
-function startOrient(){
-  if(typeof DeviceOrientationEvent!=='undefined'&&
-     typeof DeviceOrientationEvent.requestPermission==='function'){
-    DeviceOrientationEvent.requestPermission().catch(()=>{});
-  }
-  addEventListener('deviceorientation',e=>{
-    if(e.beta!=null)dTilt=(e.beta-50)*.7;
-    if(e.gamma!=null)dRoll=e.gamma*.5;
-  },{passive:true});
-}
+addEventListener('pointermove',e=>{demoX=e.clientX;demoY=e.clientY;},{passive:true});
+addEventListener('pointerdown',e=>{demoX=e.clientX;demoY=e.clientY;
+  if(demo&&phase==='cpr')registerCompression();},{passive:true});
 
-// Demo mode: mouse/touch = hand
-addEventListener('pointermove',e=>{ demoX=e.clientX; demoY=e.clientY; },{passive:true});
-addEventListener('pointerdown',e=>{ demoX=e.clientX; demoY=e.clientY; },{passive:true});
-
-// get current "pointer" (hand or demo mouse)
+// pointer = primary hand (or both-hands center when clasped)
 function ptr(){
-  if(handX!=null) return {x:handX,y:handY,real:true};
+  if(h1&&h2&&clasped) return {x:(h1.x+h2.x)/2,y:(h1.y+h2.y)/2,real:true};
+  if(h1) return {x:h1.x,y:h1.y,real:true};
   if(demo&&demoX!=null) return {x:demoX,y:demoY,real:false};
   return null;
 }
 
-// ════════════════════════════════════════════════════════
-// SCAN PHASE → auto-place patient (no tap!)
-// ════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// SCAN — ใช้ gyroscope จริง: ต้องเอียงกล้องลงพื้น + ถือนิ่ง
+// ═══════════════════════════════════════════════════════
 function beginScan(){
-  phase='scan'; scanStart=Date.now();
+  phase='scan'; scanAccum=0; lastScanT=Date.now();
   $('scanline').style.display='block';
   document.querySelectorAll('.brk').forEach(el=>el.classList.add('show'));
   $('msg').style.display='block';
-  setMsg('📷 ชี้กล้องลงพื้นค้างไว้','ระบบกำลังสแกนหาพื้นผิว…');
+  setMsg('📐 เอียงกล้องชี้ลงพื้น','ระบบใช้ Gyroscope ตรวจมุมกล้องจริง');
   resize(); loop();
 }
 
+function scanLogic(){
+  const now=Date.now(), dt=now-lastScanT; lastScanT=now;
+
+  let pointingFloor=false, steady=false;
+
+  if(demo||!sensorOK){
+    // demo / no sensor: auto progress (with note)
+    pointingFloor=true; steady=true;
+    if(!sensorOK&&!demo) setMsg('📐 ชี้กล้องลงพื้น','(ไม่พบ Gyroscope — ใช้โหมดสำรอง)');
+  } else {
+    pointingFloor = beta>=FLOOR_BETA_MIN && beta<=FLOOR_BETA_MAX;
+    steady = moveRate<STEADY_MAX;
+    if(!pointingFloor){
+      setMsg(beta<FLOOR_BETA_MIN?'📐 เอียงกล้องลงอีก — ชี้ลงพื้น':'📐 ยกกล้องขึ้นเล็กน้อย',
+        `มุมกล้อง: ${Math.round(beta)}° (ต้องการ ${FLOOR_BETA_MIN}–${FLOOR_BETA_MAX}°)`);
+    } else if(!steady){
+      setMsg('✋ ถือกล้องนิ่งๆ','กำลังล็อคตำแหน่งพื้น…');
+    } else {
+      setMsg('🔍 กำลังสแกนพื้น…','ถือค้างไว้');
+    }
+  }
+
+  if(pointingFloor&&steady) scanAccum+=dt;
+  else scanAccum=Math.max(0,scanAccum-dt*1.5);
+
+  if(scanAccum>=SCAN_NEED) finishScan();
+}
+
 function finishScan(){
-  // Auto place at screen center-bottom area
   pX=cv.width*.5; pY=cv.height*.55;
+  // record anchor orientation
+  if(sensorOK){ anchorB=beta; anchorG=gamma; }
   matStart=Date.now(); matScale=0;
   phase='mat';
   beep(820,130);
   if(navigator.vibrate)navigator.vibrate([25,50,25]);
-  setMsg('👤 พบผู้ป่วยหมดสติ!','');
+  setMsg('👤 พบผู้ป่วยหมดสติ!','ตำแหน่งถูกล็อคกับพื้นแล้ว — ลองขยับมือถือดู');
 }
 
 function afterMat(){
   phase='safety0'; waveCount=0; lastWX=null;
   $('hud-t').style.display='flex';
   setTag('SCENE 1 — ประเมินสถานการณ์'); setDots(0);
-  setMsg('🔍 มองรอบๆ แล้วค้างมือบนปุ่ม "ปลอดภัย"','ค้างมือเหนือปุ่ม 1.2 วินาที = กด');
+  setMsg('🔍 มองรอบๆ แล้วค้างมือบนปุ่ม "ปลอดภัย"','ค้างมือเหนือปุ่ม 1.1 วินาที = เลือก');
 }
 
-// ════════════════════════════════════════════════════════
-// AIR HOVER (dwell) SYSTEM
-// zones=[{id,x,y,r,label}] → returns triggered id or null
-// ════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// AIR HOVER
+// ═══════════════════════════════════════════════════════
 function updateDwell(zones){
   const p=ptr();
-  if(!p){ dwellTarget=null; dwellProg=0; return null; }
+  if(!p){dwellTarget=null;dwellProg=0;return null;}
   let over=null;
   for(const z of zones){
-    const dx=p.x-z.x, dy=p.y-z.y;
-    if(Math.sqrt(dx*dx+dy*dy)<z.r){ over=z; break; }
+    if(Math.hypot(p.x-z.x,p.y-z.y)<z.r){over=z;break;}
   }
-  if(!over){ dwellTarget=null; dwellProg=0; return null; }
-  if(dwellTarget!==over.id){ dwellTarget=over.id; dwellStart=Date.now(); }
+  if(!over){dwellTarget=null;dwellProg=0;return null;}
+  if(dwellTarget!==over.id){dwellTarget=over.id;dwellStart=Date.now();}
   dwellProg=Math.min(1,(Date.now()-dwellStart)/DWELL_MS);
   if(dwellProg>=1){
-    dwellTarget=null; dwellProg=0;
+    dwellTarget=null;dwellProg=0;
     beep(900,80);
     if(navigator.vibrate)navigator.vibrate(35);
     return over.id;
@@ -301,120 +365,82 @@ function updateDwell(zones){
   return null;
 }
 
-// Draw a hover button (circle + label + progress arc)
 function drawHoverBtn(z,color='#00D4FF',icon=''){
   const p=(Math.sin(Date.now()/450)+1)*.5;
   const active=dwellTarget===z.id;
-  // base circle
-  G.beginPath(); G.arc(z.x,z.y,z.r,0,Math.PI*2);
-  G.fillStyle=active?'rgba(0,255,136,.16)':hexA(color,.10); G.fill();
+  G.beginPath();G.arc(z.x,z.y,z.r,0,Math.PI*2);
+  G.fillStyle=active?'rgba(0,255,136,.16)':hexA(color,.10);G.fill();
   G.strokeStyle=active?'#00FF88':hexA(color,.55+p*.3);
-  G.lineWidth=2; G.stroke();
-  // progress arc
+  G.lineWidth=2;G.stroke();
   if(active&&dwellProg>0){
     G.beginPath();
     G.arc(z.x,z.y,z.r+6,-Math.PI/2,-Math.PI/2+dwellProg*Math.PI*2);
-    G.strokeStyle='#00FF88'; G.lineWidth=4; G.lineCap='round'; G.stroke();
-    G.lineCap='butt';
+    G.strokeStyle='#00FF88';G.lineWidth=4;G.lineCap='round';G.stroke();G.lineCap='butt';
   }
-  // icon+label
   G.textAlign='center';
-  if(icon){ G.font=`${Math.round(z.r*.62)}px system-ui`;
-    G.textBaseline='middle'; G.fillStyle='#fff';
-    G.fillText(icon,z.x,z.y-(z.label?6:0)); }
-  if(z.label){
-    G.font='bold 11px system-ui'; G.textBaseline='top';
+  if(icon){G.font=`${Math.round(z.r*.6)}px system-ui`;G.textBaseline='middle';
+    G.fillStyle='#fff';G.fillText(icon,z.x,z.y-(z.label?6:0));}
+  if(z.label){G.font='bold 11px system-ui';G.textBaseline='top';
     G.fillStyle=active?'#00FF88':'#fff';
-    G.fillText(z.label,z.x,z.y+z.r*.32);
-  }
+    G.fillText(z.label,z.x,z.y+z.r*.3);}
   G.textBaseline='alphabetic';
 }
-function hexA(hex,a){
-  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
-  return `rgba(${r},${g},${b},${a})`;
-}
+function hexA(hx,a){const r=parseInt(hx.slice(1,3),16),g=parseInt(hx.slice(3,5),16),
+  b=parseInt(hx.slice(5,7),16);return `rgba(${r},${g},${b},${a})`;}
 
-// ════════════════════════════════════════════════════════
-// SCENE LOGIC (run per frame)
-// ════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// SCENES
+// ═══════════════════════════════════════════════════════
 function sceneLogic(w,h){
-  const S=getS();
+  const S=getS(),AXX=aX(),AYY=aY();
 
-  // ── SAFETY 0: ตรวจความปลอดภัย (hover ปุ่ม) ──
   if(phase==='safety0'){
-    const z={id:'safe',x:w*.5,y:pY-S*1.45*PERSP-90,r:46,label:'ปลอดภัย'};
+    const z={id:'safe',x:AXX,y:AYY-S*1.45*PERSP-90,r:46,label:'ปลอดภัย'};
     drawHoverBtn(z,'#00D4FF','🔍');
     if(updateDwell([z])==='safe'){
-      sc+=25; updHUD(); setFb('+25','#00D4FF');
-      phase='safety1'; waveCount=0; lastWX=null;
-      setMsg('👋 โบกมือไปมา เหนือตัวผู้ป่วย = เขย่าปลุก','ขยับมือซ้าย-ขวาเร็วๆ 4 ครั้ง');
+      sc+=25;updHUD();setFb('+25','#00D4FF');
+      phase='safety1';waveCount=0;lastWX=null;
+      setMsg('👋 โบกมือไปมาเหนือตัวผู้ป่วย = เขย่าปลุก','ขยับมือซ้าย-ขวา 4 ครั้ง');
     }
   }
-
-  // ── SAFETY 1: เขย่าปลุก (wave detection) ──
   else if(phase==='safety1'){
     const p=ptr();
-    // wave zone over patient body
-    const zx=pX-S*.7,zy=pY-S*.9*PERSP,zw=S*1.4,zh=S*1.8*PERSP;
-    // draw zone
+    const zx=AXX-S*.7,zy=AYY-S*.9*PERSP,zw=S*1.4,zh=S*1.8*PERSP;
     const pu=(Math.sin(Date.now()/400)+1)*.5;
-    G.strokeStyle=`rgba(255,179,0,${.35+pu*.3})`; G.lineWidth=1.6;
-    G.setLineDash([9,6]); G.strokeRect(zx,zy,zw,zh); G.setLineDash([]);
-    // wave progress
-    G.fillStyle='#FFB300'; G.font='bold 13px system-ui'; G.textAlign='center';
-    G.fillText(`โบกมือ ${waveCount}/${WAVE_NEED}`, pX, zy-12);
-
-    if(p && p.x>zx&&p.x<zx+zw&&p.y>zy&&p.y<zy+zh){
+    G.strokeStyle=`rgba(255,179,0,${.35+pu*.3})`;G.lineWidth=1.6;
+    G.setLineDash([9,6]);G.strokeRect(zx,zy,zw,zh);G.setLineDash([]);
+    G.fillStyle='#FFB300';G.font='bold 13px system-ui';G.textAlign='center';
+    G.fillText(`โบกมือ ${waveCount}/${WAVE_NEED}`,AXX,zy-12);
+    if(p&&p.x>zx&&p.x<zx+zw&&p.y>zy&&p.y<zy+zh){
       if(lastWX!=null){
         const dx=p.x-lastWX;
         if(Math.abs(dx)>8){
           const dir=Math.sign(dx);
-          if(dir!==waveDir&&waveDir!==0){ waveCount++; beep(600+waveCount*80,45); }
+          if(dir!==waveDir&&waveDir!==0){waveCount++;beep(600+waveCount*80,45);}
           waveDir=dir;
         }
       }
       lastWX=p.x;
     } else lastWX=null;
-
     if(waveCount>=WAVE_NEED){
-      sc+=25; updHUD(); setFb('ไม่ตอบสนอง!','#FF3366');
+      sc+=25;updHUD();setFb('ไม่ตอบสนอง!','#FF3366');
       phase='safety2';
-      setMsg('🚨 ผู้ป่วยไม่ตอบสนอง! ต้องโทรขอความช่วยเหลือ','ค้างมือบนปุ่มโทร');
+      setMsg('🚨 ผู้ป่วยไม่ตอบสนอง!','ค้างมือบนปุ่มโทร');
     }
   }
-
-  // ── SAFETY 2: ยืนยันโทร (hover) ──
   else if(phase==='safety2'){
-    const z={id:'call',x:w*.5,y:pY-S*1.45*PERSP-90,r:46,label:'โทร 1669'};
+    const z={id:'call',x:AXX,y:AYY-S*1.45*PERSP-90,r:46,label:'โทร 1669'};
     drawHoverBtn(z,'#FF3366','📞');
-    if(updateDwell([z])==='call'){
-      sc+=25; updHUD();
-      startCall();
-    }
+    if(updateDwell([z])==='call'){sc+=25;updHUD();startCall();}
   }
-
-  // ── CALL: hover เลข 1→6→6→9 ──
-  else if(phase==='call'){
-    drawCallScene(w,h);
-  }
-
-  // ── CPR: motion detection ──
-  else if(phase==='cpr'){
-    cprMotion(w,h);
-  }
-
-  // ── AED: hover 2 จุด ──
-  else if(phase==='aed'){
-    drawAEDScene(w,h);
-  }
-
-  // ── SHOCK: hover ปุ่ม shock ──
+  else if(phase==='call'){ drawCallScene(w,h); }
+  else if(phase==='cpr'){ cprMotion(w,h); }
+  else if(phase==='aed'){ drawAEDScene(w,h); }
   else if(phase==='shock'){
-    const z={id:'shock',x:w*.5,y:pY-S*1.45*PERSP-90,r:50,label:'SHOCK!'};
+    const z={id:'shock',x:AXX,y:AYY-S*1.45*PERSP-90,r:50,label:'SHOCK!'};
     drawHoverBtn(z,'#FF3366','⚡');
     if(updateDwell([z])==='shock'){
-      aedShocked=true; sc+=70; updHUD();
-      beep(200,400);
+      sc+=70;updHUD();beep(200,400);
       if(navigator.vibrate)navigator.vibrate([50,80,50,80,50]);
       setFb('⚡ SHOCK!','#FFB300');
       setMsg('ส่งกระแสไฟฟ้าสำเร็จ!','');
@@ -424,111 +450,100 @@ function sceneLogic(w,h){
   }
 }
 
-// ════════════════════════════════════════════════════════
-// CALL SCENE — hover ตัวเลขตามลำดับ 1,6,6,9
-// ════════════════════════════════════════════════════════
-let callSeq=['1','6','6','9'], callIdx=0;
-let callZones=null;
-
+// ═══════════════════════════════════════════════════════
+// CALL
+// ═══════════════════════════════════════════════════════
 function startCall(){
-  phase='call'; callIdx=0;
-  setTag('SCENE 2 — โทร 1669'); setDots(1);
-  setMsg('📞 ค้างมือบนตัวเลข ตามลำดับ 1 → 6 → 6 → 9','');
-  // สร้างตำแหน่งเลขลอยบนจอ (คงที่)
+  phase='call';callIdx=0;
+  setTag('SCENE 2 — โทร 1669');setDots(1);
+  setMsg('📞 ค้างมือบนตัวเลขตามลำดับ 1 → 6 → 6 → 9','');
   const w=cv.width,h=cv.height;
-  const nums=['1','4','6','9','3'];
-  callZones=[];
-  const cxs=[.2,.5,.8,.32,.68], cys=[.3,.22,.3,.45,.45];
-  // วางเลขที่ต้องใช้ + เลขหลอก
   const labels=['1','6','9','4','3'];
-  for(let i=0;i<5;i++){
-    callZones.push({id:'n'+labels[i], num:labels[i],
-      x:w*cxs[i], y:h*cys[i], r:38});
-  }
+  const cxs=[.2,.5,.8,.32,.68],cys=[.3,.22,.3,.45,.45];
+  callZones=[];
+  for(let i=0;i<5;i++)
+    callZones.push({id:'n'+i,num:labels[i],x:w*cxs[i],y:h*cys[i],r:38});
 }
 
 function drawCallScene(w,h){
-  // dial progress
-  G.font='bold 30px monospace'; G.textAlign='center';
-  G.fillStyle='#00D4FF';
-  let disp='';
-  for(let i=0;i<4;i++) disp+= i<callIdx?callSeq[i]:'_';
-  G.fillText(disp.split('').join(' '), w*.5, h*.14);
-
+  G.font='bold 30px monospace';G.textAlign='center';G.fillStyle='#00D4FF';
+  let d='';for(let i=0;i<4;i++)d+=i<callIdx?callSeq[i]:'_';
+  G.fillText(d.split('').join(' '),w*.5,h*.14);
   const need=callSeq[callIdx];
   for(const z of callZones){
     const isNext=z.num===need;
-    drawHoverBtn(z, isNext?'#00FF88':'#445566', '', );
-    G.font='bold 26px monospace'; G.textAlign='center'; G.textBaseline='middle';
+    drawHoverBtn(z,isNext?'#00FF88':'#445566');
+    G.font='bold 26px monospace';G.textAlign='center';G.textBaseline='middle';
     G.fillStyle=isNext?'#00FF88':'rgba(255,255,255,.4)';
-    G.fillText(z.num,z.x,z.y);
-    G.textBaseline='alphabetic';
+    G.fillText(z.num,z.x,z.y);G.textBaseline='alphabetic';
   }
   const hit=updateDwell(callZones);
   if(hit){
     const z=callZones.find(c=>c.id===hit);
     if(z.num===need){
-      callIdx++; beep(700+callIdx*70,55);
+      callIdx++;beep(700+callIdx*70,55);
       if(callIdx>=4){
-        sc+=80; updHUD(); setFb('1669 ✓','#00FF88');
-        setTimeout(startCPR,800);
+        sc+=80;updHUD();setFb('1669 ✓','#00FF88');
         phase='call_done';
+        setTimeout(startCPR,800);
       }
-    } else {
-      setFb('ผิด!','#FF3366'); beep(200,160); callIdx=0;
-    }
+    } else {setFb('ผิด!','#FF3366');beep(200,160);callIdx=0;}
   }
 }
 
-// ════════════════════════════════════════════════════════
-// CPR — ตรวจจับการปั๊มมือขึ้นลงจริง (ไม่ต้องแตะ)
-// ════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// CPR — ต้องประสานมือ 2 ข้าง (clasped) แล้วปั๊มจริง
+// ═══════════════════════════════════════════════════════
 function startCPR(){
-  phase='cpr'; compr=0; bwin=[]; cbpm=0; cA=0;
-  yHist=[]; pumpState='up'; pumpRefY=null; lastPumpT=0;
-  setTag('SCENE 3 — CPR'); setDots(2);
-  setMsg('🤲 วางมือบนหน้าอกผู้ป่วย แล้วปั๊มขึ้น-ลง','ระบบตรวจจับการเคลื่อนไหวจริง — เป้าหมาย 100-120 ครั้ง/นาที');
+  phase='cpr';compr=0;bwin=[];cbpm=0;cA=0;
+  pumpState='up';pumpRefY=null;lastPumpT=0;
+  setTag('SCENE 3 — CPR');setDots(2);
+  postureEl.style.display='block';
+  setMsg('🤲 ประสานมือ 2 ข้าง วางบนหน้าอก แล้วปั๊มขึ้น-ลง',
+    'AI ตรวจท่าประสานมือ — ประสานถูกต้องถึงได้ PERFECT');
 }
 
 function cprMotion(w,h){
   const S=getS();
   const p=ptr();
-
-  // chest zone
-  const cx=pX, cy=pY-S*.04*PERSP;
-  const zR=S*.45;
+  const cx=aX(),cy=aY()-S*.04*PERSP;
+  const zR=S*.5;
   inChest=false;
 
-  if(p){
-    const dx=p.x-cx, dy=(p.y-cy)/PERSP;  // perspective-corrected distance
-    if(Math.sqrt(dx*dx+dy*dy)<zR/0.7) inChest=true;
-  }
-
-  if(inChest&&p){
-    // track vertical motion
-    yHist.push({y:p.y,t:Date.now()});
-    if(yHist.length>14)yHist.shift();
-
-    if(pumpRefY===null) pumpRefY=p.y;
-
-    const dy=p.y-pumpRefY;
-    if(pumpState==='up' && dy>PUMP_MIN){
-      pumpState='down'; pumpRefY=p.y;
-    } else if(pumpState==='down' && dy<-PUMP_MIN){
-      // completed one full pump (down→up) = 1 compression!
-      pumpState='up'; pumpRefY=p.y;
-      registerCompression();
-    } else {
-      // track extremes
-      if(pumpState==='up' && p.y<pumpRefY) pumpRefY=p.y;
-      if(pumpState==='down'&& p.y>pumpRefY) pumpRefY=p.y;
-    }
+  // posture indicator
+  if(demo){
+    postureEl.className='good';postureEl.textContent='🎮 Demo Mode — แตะจอ = ปั๊ม';
+  } else if(clasped){
+    postureEl.className='good';postureEl.textContent='🤲 ประสานมือ ✓';
+  } else if(h1&&h2){
+    postureEl.className='';postureEl.textContent='🤲 เอามือชิดกัน — ประสานมือ!';
+  } else if(h1){
+    postureEl.className='';postureEl.textContent='✋ ใช้มือ 2 ข้างประสานกัน!';
   } else {
-    pumpRefY=null; yHist=[];
+    postureEl.className='';postureEl.textContent='👀 ไม่เห็นมือ — ยกมือเข้ากล้อง';
   }
 
-  // demo fallback: tap also counts
-  // (registered via pointerdown listener below)
+  if(p){
+    const dx=p.x-cx,dy=(p.y-cy)/PERSP;
+    if(Math.hypot(dx,dy)<zR/0.7)inChest=true;
+  }
+
+  if(inChest&&p&&(clasped||demo)){
+    if(pumpRefY===null)pumpRefY=p.y;
+    const dy=p.y-pumpRefY;
+    if(pumpState==='up'&&dy>PUMP_MIN){pumpState='down';pumpRefY=p.y;}
+    else if(pumpState==='down'&&dy<-PUMP_MIN){
+      pumpState='up';pumpRefY=p.y;registerCompression();
+    } else {
+      if(pumpState==='up'&&p.y<pumpRefY)pumpRefY=p.y;
+      if(pumpState==='down'&&p.y>pumpRefY)pumpRefY=p.y;
+    }
+  } else if(inChest&&p&&h1&&!clasped){
+    // hands in zone but not clasped — no counting, just hint (handled by posture)
+    pumpRefY=null;
+  } else {
+    pumpRefY=null;
+  }
 }
 
 function registerCompression(){
@@ -538,88 +553,80 @@ function registerCompression(){
   const iv=lastPumpT>0?now-lastPumpT:545;
   lastPumpT=now;
   const b=Math.round(60000/iv);
-  if(b>=30&&b<=220){ bwin.push(b); if(bwin.length>6)bwin.shift();
-    cbpm=Math.round(bwin.reduce((a,c)=>a+c,0)/bwin.length); }
+  if(b>=30&&b<=220){bwin.push(b);if(bwin.length>6)bwin.shift();
+    cbpm=Math.round(bwin.reduce((a,c)=>a+c,0)/bwin.length);}
 
   let pts,txt,col,hz;
-  if(cbpm>=100&&cbpm<=120){pts=12;txt='PERFECT!';col='#FFB300';hz=1050;}
+  const goodForm=clasped||demo;
+  if(cbpm>=100&&cbpm<=120&&goodForm){pts=12;txt='PERFECT!';col='#FFB300';hz=1050;}
   else if(cbpm>=90&&cbpm<=130){pts=6;txt='GOOD';col='#00D4FF';hz=780;}
   else if(cbpm<90){pts=2;txt='เร็วขึ้น!';col='#FF9900';hz=340;}
   else{pts=2;txt='ช้าลง!';col='#FF9900';hz=340;}
 
-  beep(hz,60); cA=1; compr++; sc+=pts;
-  setFb(txt,col); updHUD();
+  beep(hz,60);cA=1;compr++;sc+=pts;
+  setFb(txt,col);updHUD();
   if(navigator.vibrate)navigator.vibrate(28);
 
   if(compr>=TOTAL){
     phase='cpr_done';
+    postureEl.style.display='none';
     setFb('✅ ครบ 30!','#00FF88');
     setMsg('CPR สำเร็จ! เตรียมใช้เครื่อง AED','');
     setTimeout(startAED,1400);
   }
 }
 
-// Demo mode: tap = compression (only in CPR)
-addEventListener('pointerdown',()=>{
-  if(demo&&phase==='cpr')registerCompression();
-},{passive:true});
-
-// ════════════════════════════════════════════════════════
-// AED SCENE — hover 2 ตำแหน่ง
-// ════════════════════════════════════════════════════════
-const AED_ZONES=[
-  {id:'a0', label:'บนอกขวา',    dx: .17, dy:-.24, ok:true },
-  {id:'a1', label:'กลางอก',      dx: 0,   dy:-.06, ok:false},
-  {id:'a2', label:'ชายโครงซ้าย', dx:-.24, dy: .10, ok:true },
-  {id:'a3', label:'หน้าท้อง',    dx: 0,   dy: .32, ok:false},
+// ═══════════════════════════════════════════════════════
+// AED
+// ═══════════════════════════════════════════════════════
+const AED_Z=[
+  {id:'a0',label:'บนอกขวา',dx:.17,dy:-.24,ok:true},
+  {id:'a1',label:'กลางอก',dx:0,dy:-.06,ok:false},
+  {id:'a2',label:'ชายโครงซ้าย',dx:-.24,dy:.10,ok:true},
+  {id:'a3',label:'หน้าท้อง',dx:0,dy:.32,ok:false},
 ];
 
 function startAED(){
-  phase='aed'; aedPlaced=new Set(); aedArmed=false;
-  setTag('SCENE 4 — AED'); setDots(3);
-  setMsg('⚡ ค้างมือบน 2 ตำแหน่งที่ถูกต้อง เพื่อวางแผ่น AED','ตำแหน่งวางแผ่น: บนอกขวา + ชายโครงซ้าย');
+  phase='aed';aedPlaced=new Set();aedArmed=false;
+  setTag('SCENE 4 — AED');setDots(3);
+  setMsg('⚡ ค้างมือบน 2 ตำแหน่งที่ถูกต้อง','วางแผ่น: บนอกขวา + ชายโครงซ้าย');
 }
 
 function drawAEDScene(w,h){
-  const S=getS();
-  const zones=AED_ZONES.map(z=>({
-    id:z.id, label:z.label, ok:z.ok,
-    x:pX+z.dx*S, y:pY+z.dy*S*PERSP*2.2, r:34
-  }));
-
+  const S=getS(),AXX=aX(),AYY=aY();
+  const zones=AED_Z.map(z=>({id:z.id,label:z.label,ok:z.ok,
+    x:AXX+z.dx*S,y:AYY+z.dy*S*PERSP*2.2,r:34}));
   for(const z of zones){
     const placed=aedPlaced.has(z.id);
     const col=placed?(aedArmed?'#00FF88':'#FFB300'):'#00D4FF';
-    drawHoverBtn({...z,label:placed?'✓':z.label},col, placed?'':'');
+    drawHoverBtn({...z,label:placed?'✓':z.label},col);
   }
   if(aedArmed)return;
   const hit=updateDwell(zones);
   if(hit&&!aedPlaced.has(hit)){
     if(aedPlaced.size>=2)return;
-    aedPlaced.add(hit);
-    beep(660,50);
+    aedPlaced.add(hit);beep(660,50);
     if(aedPlaced.size===2){
-      const allOk=[...aedPlaced].every(id=>AED_ZONES.find(z=>z.id===id).ok);
-      if(allOk){
-        aedArmed=true; sc+=180; updHUD();
+      const ok=[...aedPlaced].every(id=>AED_Z.find(z=>z.id===id).ok);
+      if(ok){
+        aedArmed=true;sc+=180;updHUD();
         setFb('ถูกต้อง!','#00FF88');
-        setMsg('✅ แผ่นวางถูกตำแหน่ง — ห้ามสัมผัสผู้ป่วย!','ค้างมือบนปุ่ม SHOCK');
-        phase='shock';
-        beep(1050,100);
+        setMsg('✅ ห้ามสัมผัสผู้ป่วย!','ค้างมือบนปุ่ม SHOCK');
+        phase='shock';beep(1050,100);
       } else {
-        setFb('ผิดตำแหน่ง!','#FF3366'); beep(200,200);
+        setFb('ผิดตำแหน่ง!','#FF3366');beep(200,200);
         setTimeout(()=>{aedPlaced=new Set();},800);
       }
     }
   }
 }
 
-// ════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // RESULT
-// ════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 function showResult(){
-  $('msg').style.display='none'; $('dots').style.display='none';
-  $('scene-tag').className='';
+  $('msg').style.display='none';$('dots').style.display='none';
+  $('scene-tag').className='';postureEl.style.display='none';
   const e=sc>=480?'🏆':sc>=330?'🥇':sc>=190?'🥈':'🥉';
   const n=sc>=480?'LifeBeat Hero':sc>=330?'Gold Responder':sc>=190?'Silver Responder':'Bronze Responder';
   const cl=sc>=480?'#FFD700':sc>=330?'#FFC107':sc>=190?'#C0C0C0':'#CD7F32';
@@ -635,9 +642,9 @@ function showResult(){
   $('p-res').style.display='block';
 }
 
-// ════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // AUDIO
-// ════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 function beep(hz=700,ms=70){
   try{
     if(!aCtx)aCtx=new(window.AudioContext||window.webkitAudioContext)();
@@ -650,59 +657,73 @@ function beep(hz=700,ms=70){
   }catch(_){}
 }
 
-// ════════════════════════════════════════════════════════
-// RENDER LOOP
-// ════════════════════════════════════════════════════════
-function loop(){ draw(); requestAnimationFrame(loop); }
+// ═══════════════════════════════════════════════════════
+// LOOP
+// ═══════════════════════════════════════════════════════
+function loop(){draw();requestAnimationFrame(loop);}
 
 function draw(){
   const w=cv.width,h=cv.height;
   G.clearRect(0,0,w,h);
   if(demo){G.fillStyle='#050A14';G.fillRect(0,0,w,h);drawGrid(w,h);}
-
   cA=Math.max(0,cA-.06);
 
-  if(phase==='scan'){
-    drawScan(w,h);
-    if(Date.now()-scanStart>=SCAN_MS) finishScan();
-    drawPointer();
-    return;
-  }
+  if(phase==='scan'){scanLogic();drawScan(w,h);drawPointer();return;}
   if(phase==='mat'&&matStart){
     const t=Math.min(1,(Date.now()-matStart)/750);
     matScale=easeOutBack(t);
     if(t>=1){matScale=1;afterMat();}
   }
-  if(!pX){ drawPointer(); return; }
+  if(!pX){drawPointer();return;}
 
   drawPatient(w,h);
   sceneLogic(w,h);
   drawPointer();
 }
 
-// ════════════════════════════════════════════════════════
-// SCAN ANIMATION
-// ════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// SCAN VISUAL
+// ═══════════════════════════════════════════════════════
 function drawScan(w,h){
   const cx=w*.5,cy=h*.55,t=Date.now();
-  const prog=Math.min(1,(t-scanStart)/SCAN_MS);
+  const prog=Math.min(1,scanAccum/SCAN_NEED);
   const Rx=Math.min(w,h)*.32,Ry=Rx*PERSP*.7;
-  // expanding rings
+  const valid=demo||!sensorOK||
+    (beta>=FLOOR_BETA_MIN&&beta<=FLOOR_BETA_MAX&&moveRate<STEADY_MAX);
+
   for(let i=0;i<3;i++){
     const ph=((t/1100+i/3)%1);
     G.beginPath();
-    G.ellipse(cx,cy,Rx*(0.25+ph*.75),Ry*(0.25+ph*.75),0,0,Math.PI*2);
-    G.strokeStyle=`rgba(0,212,255,${Math.max(0,1-ph)*.55})`;
+    G.ellipse(cx,cy,Rx*(.25+ph*.75),Ry*(.25+ph*.75),0,0,Math.PI*2);
+    G.strokeStyle=valid
+      ?`rgba(0,255,136,${Math.max(0,1-ph)*.5})`
+      :`rgba(255,179,0,${Math.max(0,1-ph)*.4})`;
     G.lineWidth=1.5;G.stroke();
   }
   // progress arc
   G.beginPath();
   G.ellipse(cx,cy,Rx*.32,Ry*.32,0,-Math.PI/2,-Math.PI/2+prog*Math.PI*2);
   G.strokeStyle='#00FF88';G.lineWidth=4;G.lineCap='round';G.stroke();G.lineCap='butt';
-  // percent
   G.font='bold 16px system-ui';G.textAlign='center';
   G.fillStyle='rgba(255,255,255,.85)';
   G.fillText(Math.round(prog*100)+'%',cx,cy+6);
+
+  // tilt gauge (real sensor)
+  if(sensorOK&&!demo){
+    const gx2=w*.5,gy=h*.83,gw=Math.min(220,w*.6);
+    G.fillStyle='rgba(255,255,255,.15)';
+    G.fillRect(gx2-gw/2,gy,gw,4);
+    // valid range band
+    const minP=FLOOR_BETA_MIN/120,maxP=FLOOR_BETA_MAX/120;
+    G.fillStyle='rgba(0,255,136,.3)';
+    G.fillRect(gx2-gw/2+gw*minP,gy,gw*(maxP-minP),4);
+    // needle
+    const bp=Math.max(0,Math.min(1,(beta||0)/120));
+    G.fillStyle=valid?'#00FF88':'#FFB300';
+    G.beginPath();G.arc(gx2-gw/2+gw*bp,gy+2,7,0,Math.PI*2);G.fill();
+    G.font='10px system-ui';G.fillStyle='rgba(255,255,255,.5)';
+    G.fillText('มุมเอียงกล้อง',gx2,gy+24);
+  }
 }
 
 function drawGrid(w,h){
@@ -718,44 +739,51 @@ function drawGrid(w,h){
   });
 }
 
-// ════════════════════════════════════════════════════════
-// POINTER (hand cursor)
-// ════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// POINTER — show both hands + clasp link
+// ═══════════════════════════════════════════════════════
 function drawPointer(){
-  const p=ptr();
-  if(!p)return;
-  const t=Date.now();
-  const pu=(Math.sin(t/300)+1)*.5;
-  // hand cursor ring
-  G.beginPath();G.arc(p.x,p.y,16,0,Math.PI*2);
-  G.strokeStyle=p.real?`rgba(0,255,136,${.6+pu*.3})`:`rgba(0,212,255,${.6+pu*.3})`;
-  G.lineWidth=2;G.stroke();
-  G.beginPath();G.arc(p.x,p.y,3.5,0,Math.PI*2);
-  G.fillStyle=p.real?'#00FF88':'#00D4FF';G.fill();
-  // draw fingertips if real hand
-  if(lms.length){
-    const lm=lms[0];
-    for(const fi of [4,8,12,16,20]){
-      G.beginPath();
-      G.arc(lm[fi].x*cv.width,lm[fi].y*cv.height,4,0,Math.PI*2);
-      G.fillStyle='rgba(0,255,136,.55)';G.fill();
-    }
+  const t=Date.now(),pu=(Math.sin(t/300)+1)*.5;
+  // both hands
+  if(h1&&h2){
+    // link line
+    G.beginPath();G.moveTo(h1.x,h1.y);G.lineTo(h2.x,h2.y);
+    G.strokeStyle=clasped?'rgba(0,255,136,.5)':'rgba(255,179,0,.35)';
+    G.lineWidth=clasped?2.5:1.5;
+    if(!clasped)G.setLineDash([5,5]);
+    G.stroke();G.setLineDash([]);
+  }
+  for(const hd of [h1,h2]){
+    if(!hd)continue;
+    G.beginPath();G.arc(hd.x,hd.y,15,0,Math.PI*2);
+    G.strokeStyle=clasped?`rgba(0,255,136,${.6+pu*.3})`:`rgba(0,212,255,${.55+pu*.3})`;
+    G.lineWidth=2;G.stroke();
+    G.beginPath();G.arc(hd.x,hd.y,3,0,Math.PI*2);
+    G.fillStyle=clasped?'#00FF88':'#00D4FF';G.fill();
+  }
+  if(!h1&&demo&&demoX!=null){
+    G.beginPath();G.arc(demoX,demoY,15,0,Math.PI*2);
+    G.strokeStyle=`rgba(0,212,255,${.55+pu*.3})`;G.lineWidth=2;G.stroke();
+    G.beginPath();G.arc(demoX,demoY,3,0,Math.PI*2);
+    G.fillStyle='#00D4FF';G.fill();
   }
 }
 
-// ════════════════════════════════════════════════════════
-// PATIENT
-// ════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// PATIENT (world-anchored at aX(),aY())
+// ═══════════════════════════════════════════════════════
 function getS(){return Math.min(cv.width,cv.height)*matScale*.26;}
 
 function drawPatient(w,h){
-  const S=getS(), dp=cA*S*.044;
+  const B=Math.min(w,h)*.26;
+  const S=getS(),dp=cA*B*.044;
+  const AXX=aX(),AYY=aY();
   G.save();
-  G.translate(pX,pY);
+  G.translate(AXX,AYY);
   if(matScale<1){
     const burst=1-matScale;
     for(let i=0;i<8;i++){
-      const a=(i/8)*Math.PI*2,r=S*burst*.9;
+      const a=(i/8)*Math.PI*2,r=B*burst*.9;
       G.beginPath();G.arc(Math.cos(a)*r,Math.sin(a)*r*PERSP,3,0,Math.PI*2);
       G.fillStyle=`rgba(0,212,255,${burst*.8})`;G.fill();
     }
@@ -763,30 +791,21 @@ function drawPatient(w,h){
   G.scale(matScale,matScale);
   G.scale(1,PERSP);
 
-  // shadow
   G.globalAlpha=.22;G.fillStyle='#000';
-  G.beginPath();G.ellipse(0,S*.14/Math.max(.01,matScale),S*1.32,S*.24,0,0,Math.PI*2);G.fill();
+  G.beginPath();G.ellipse(0,B*.14,B*1.32,B*.24,0,0,Math.PI*2);G.fill();
   G.globalAlpha=.88;
 
-  const u=S/Math.max(.01,matScale); // unit in local space pre-scale... actually use S directly
-  // Use S directly since we scaled by matScale already
-  const B=Math.min(cv.width,cv.height)*.26;
-
-  // LEGS
   fRR(-B*.28,B*.62,B*.22,B*.70,B*.10,'#1D2F50');
   fRR( B*.06,B*.62,B*.22,B*.70,B*.10,'#1A2848');
   fRR(-B*.31,B*1.28,B*.28,B*.13,B*.06,'#0D1220');
   fRR( B*.03,B*1.28,B*.28,B*.13,B*.06,'#0D1220');
-  // TORSO
   fRR(-B*.47,-B*.52+dp,B*.94,B*1.18,B*.13,'#2A55A0');
   sRR(-B*.47,-B*.52+dp,B*.94,B*1.18,B*.13,'rgba(120,180,255,.3)',1.5);
   G.globalAlpha=.08;fRR(-B*.08,-B*.50+dp,B*.16,B*.44,B*.05,'#fff');G.globalAlpha=.88;
-  // ARMS
   fRR(-B*.76,-B*.36,B*.30,B*.92,B*.12,'#2A55A0');
   fRR( B*.46,-B*.36,B*.30,B*.92,B*.12,'#24499A');
   fEl(-B*.61,B*.62,B*.11,B*.09,'#FFCFA0');
   fEl( B*.61,B*.62,B*.11,B*.09,'#FFBF8C');
-  // HEAD
   fRR(-B*.08,-B*.56+dp,B*.16,B*.09,B*.04,'#FFCFA0');
   fEl(0,-B*.80,B*.27,B*.35,'#FFCFA0');
   G.beginPath();G.ellipse(0,-B*.98,B*.25,B*.20,0,Math.PI,0);
@@ -799,29 +818,23 @@ function drawPatient(w,h){
   G.strokeStyle='rgba(140,90,70,.5)';G.lineWidth=1.2;
   G.beginPath();G.moveTo(-B*.05,-B*.68);G.lineTo(B*.05,-B*.68);G.stroke();
 
-  // scene overlays in perspective space
-  const t=Date.now();
   if(['safety0','safety1','safety2','mat'].includes(phase)){
-    const pu=(Math.sin(t/400)+1)*.5;
-    G.globalAlpha=.6*pu;
-    G.strokeStyle='#FF3366';G.lineWidth=2;
+    const pu=(Math.sin(Date.now()/400)+1)*.5;
+    G.globalAlpha=.6*pu;G.strokeStyle='#FF3366';G.lineWidth=2;
     G.beginPath();G.ellipse(0,-B*.80,B*.38+B*.08*pu,B*.48+B*.10*pu,0,0,Math.PI*2);G.stroke();
     G.globalAlpha=.88;
   }
   G.restore();
 
-  // CHEST TARGET in screen space (CPR only)
-  if(phase==='cpr'){
-    drawChestTarget(B,dp);
-  }
+  if(phase==='cpr')drawChestTarget(B,dp);
 }
 
 function drawChestTarget(B,dp){
-  const Rx=B*matScale*.42, Ry=Rx*PERSP;
-  const cx=pX, cy=pY+(-B*.04+dp)*PERSP*matScale;
+  const Rx=B*matScale*.42,Ry=Rx*PERSP;
+  const cx=aX(),cy=aY()+(-B*.04+dp)*PERSP*matScale;
   const p=(Math.sin(Date.now()/430)+1)*.5;
-  const act=inChest;
-  const [r,g,b]=act?[0,255,136]:[255,179,0];
+  const act=inChest&&(clasped||demo);
+  const [r,g,b]=act?[0,255,136]:inChest?[255,179,0]:[255,179,0];
 
   const gr=G.createRadialGradient(cx,cy,0,cx,cy,Rx*2);
   gr.addColorStop(0,`rgba(${r},${g},${b},${.12+p*.07})`);
@@ -836,27 +849,26 @@ function drawChestTarget(B,dp){
   G.beginPath();G.ellipse(cx,cy,Rx*.15,Ry*.15,0,0,Math.PI*2);
   G.fillStyle=`rgba(${r},${g},${b},${.7+p*.25})`;G.fill();
 
-  G.font=`bold ${Math.max(11,Math.round(Rx*.22))}px system-ui`;
+  G.font=`bold ${Math.max(11,Math.round(Rx*.2))}px system-ui`;
   G.fillStyle=`rgba(${r},${g},${b},${.85+p*.1})`;
   G.textAlign='center';G.textBaseline='top';
-  G.fillText(act?'ปั๊มขึ้น-ลง!':'เอามือมาวางที่นี่',cx,cy+Ry*1.25);
+  const label=!inChest?'เอามือมาวางที่นี่':!clasped&&!demo?'ประสานมือ 2 ข้าง!':'ปั๊มขึ้น-ลง!';
+  G.fillText(label,cx,cy+Ry*1.25);
   G.textBaseline='alphabetic';
 
   if(cA>.04){
     G.beginPath();G.ellipse(cx,cy,Rx*(1-cA*.18),Ry*(1-cA*.18),0,0,Math.PI*2);
     G.strokeStyle=`rgba(255,255,255,${cA*.55})`;G.lineWidth=3.5;G.stroke();
   }
-
-  // BPM guide pulse (110 BPM visual metronome)
-  const mp=((Date.now()%545)/545);
-  const mo=Math.max(0,1-mp*1.4);
+  // 110 BPM metronome ring
+  const mp=((Date.now()%545)/545),mo=Math.max(0,1-mp*1.4);
   G.beginPath();G.ellipse(cx,cy,Rx*(.3+mp*.7),Ry*(.3+mp*.7),0,0,Math.PI*2);
   G.strokeStyle=`rgba(255,255,255,${mo*.35})`;G.lineWidth=1.5;G.stroke();
 }
 
-// ════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // HELPERS
-// ════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 function easeOutBack(t){const c1=1.70158,c3=c1+1;
   return 1+c3*Math.pow(t-1,3)+c1*Math.pow(t-1,2);}
 function mkRR(x,y,w,h,r){

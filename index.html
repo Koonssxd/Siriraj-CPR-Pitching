@@ -1,165 +1,685 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>Siriraj Markerless AR CPR Trainer</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-    
-    <!-- ดึง A-Frame เวอร์ชั่นเสถียรสำหรับ WebXR -->
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    
-    <style>
-      body { font-family: 'Helvetica Neue', Arial, sans-serif; user-select: none; }
-      
-      #instruction-banner {
-        position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-        background: rgba(0, 0, 0, 0.85); color: #fff; padding: 15px 20px;
-        border-radius: 12px; text-align: center; z-index: 9999; width: 85%;
-        max-width: 400px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); font-size: 14px;
-      }
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>LifeBeat AR CPR</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;
+  font-family:system-ui,-apple-system,sans-serif;color:#fff;
+  -webkit-tap-highlight-color:transparent;user-select:none;touch-action:none}
 
-      /* ปุ่มกดวางหุ่นที่จะโผล่มาเมื่อเจอพื้น */
-      #place-btn {
-        position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
-        z-index: 9999; display: none; padding: 16px 30px; background: #00E676;
-        color: #000; font-weight: bold; font-size: 16px; border: none;
-        border-radius: 30px; box-shadow: 0 5px 15px rgba(0,230,118,0.4); cursor: pointer;
-      }
+/* Camera feed */
+#vid{position:fixed;inset:0;width:100%;height:100%;object-fit:cover}
 
-      #control-panel {
-        position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-        z-index: 9999; display: none; flex-direction: column; width: 90%; max-width: 360px;
-      }
+/* AR canvas - draws on top of camera */
+#cv{position:fixed;inset:0;width:100%;height:100%}
 
-      .btn {
-        padding: 14px; margin: 6px 0; background: #00796B; color: white;
-        border: none; border-radius: 30px; font-size: 15px; font-weight: bold;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-      }
-      #cprBtn { background: #D32F2F; }
-    </style>
+/* All UI on top */
+#ui{position:fixed;inset:0;pointer-events:none}
 
-    <script>
-      // สคริปต์ลงทะเบียนระบบฝังตัวขับเคลื่อนตรวจจับพื้น (WebXR Hit-Test)
-      window.lastHitPosition = null;
-      window.isPlaced = false;
+/* ── HUD Top ── */
+#hud-t{
+  position:absolute;top:0;left:0;right:0;
+  padding:env(safe-area-inset-top,10px) 16px 10px;
+  padding-top:max(env(safe-area-inset-top),10px);
+  background:linear-gradient(rgba(0,0,0,.65),transparent);
+  display:none;justify-content:space-between;align-items:center;gap:8px;
+}
+.st{background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.2);
+  border-radius:10px;padding:5px 11px;text-align:center;min-width:58px}
+.sv{font-size:19px;font-weight:900;line-height:1.15}
+.sl{font-size:8px;opacity:.5;letter-spacing:1.5px;text-transform:uppercase;margin-top:1px}
 
-      AFRAME.registerComponent('ar-hit-test', {
-        init: function () {
-          this.xrHitTestSource = null;
-          this.el.sceneEl.renderer.xr.addEventListener('sessionstart', async () => {
-            let session = this.el.sceneEl.renderer.xr.getSession();
-            if (session.mode !== 'immersive-ar') return;
-            let viewerSpace = await session.requestReferenceSpace('viewer');
-            this.xrHitTestSource = await session.requestHitTestSource({ space: viewerSpace });
-          });
-        },
-        tick: function () {
-          if (!this.el.sceneEl.is('ar-mode') || window.isPlaced) return;
-          let frame = this.el.sceneEl.frame;
-          let session = this.el.sceneEl.renderer.xr.getSession();
-          if (!frame || !session || !this.xrHitTestSource) return;
-          
-          let refSpace = this.el.sceneEl.renderer.xr.getReferenceSpace();
-          let hitTestResults = frame.getHitTestResults(this.xrHitTestSource);
-          
-          if (hitTestResults.length > 0) {
-            let hit = hitTestResults[0];
-            let pose = hit.getPose(refSpace);
-            
-            // บันทึกค่าพิกัดพื้นปัจจุบันไว้
-            window.lastHitPosition = pose.transform.position;
-            
-            // เลื่อนวงแหวนสีเขียวไปตามพื้น
-            this.el.setAttribute('position', pose.transform.position);
-            this.el.setAttribute('visible', 'true');
-            
-            // เปิดปุ่มให้กดวางหุ่นได้
-            document.querySelector('#place-btn').style.display = 'block';
-            document.querySelector('#instruction-banner').innerHTML = "👍 เจอพื้นแล้ว! แพนกล้องหาจุดที่ชอบ แล้วกดปุ่มด้านล่าง";
-          }
-        }
+/* ── HUD Bottom ── */
+#hud-b{
+  position:absolute;bottom:0;left:0;right:0;
+  padding:10px 16px calc(env(safe-area-inset-bottom,0px) + 18px);
+  background:linear-gradient(transparent,rgba(0,0,0,.65));
+  text-align:center;display:none;
+}
+#fb{font-size:26px;font-weight:900;letter-spacing:2px;min-height:32px;margin-bottom:4px}
+#ins{font-size:13px;line-height:1.55;opacity:.88}
+#bar-w{height:3px;background:rgba(255,255,255,.12);border-radius:2px;margin-top:10px;overflow:hidden}
+#bar{height:100%;width:0%;background:linear-gradient(90deg,#00D4FF,#00FF88);border-radius:2px}
+
+/* ── AR Brackets ── */
+.brk{position:absolute;width:22px;height:22px;opacity:.6;display:none;pointer-events:none}
+#bk-tl{top:max(env(safe-area-inset-top),8px);left:8px;
+  border-top:2px solid #00D4FF;border-left:2px solid #00D4FF}
+#bk-tr{top:max(env(safe-area-inset-top),8px);right:8px;
+  border-top:2px solid #00D4FF;border-right:2px solid #00D4FF}
+#bk-bl{bottom:max(env(safe-area-inset-bottom),8px);left:8px;
+  border-bottom:2px solid #00D4FF;border-left:2px solid #00D4FF}
+#bk-br{bottom:max(env(safe-area-inset-bottom),8px);right:8px;
+  border-bottom:2px solid #00D4FF;border-right:2px solid #00D4FF}
+
+/* ── Scanline ── */
+@keyframes scan{from{top:-2px}to{top:100vh}}
+#scan{position:fixed;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,rgba(0,212,255,.3),transparent);
+  animation:scan 3.5s linear infinite;pointer-events:none;display:none}
+
+/* ── Hand ring ── */
+#hring{position:absolute;width:72px;height:72px;
+  border:2px solid rgba(255,179,0,.65);border-radius:50%;
+  pointer-events:none;display:none;transform:translate(-50%,-50%);
+  transition:border-color .12s,box-shadow .12s}
+#hring.ok{border-color:rgba(0,255,136,.85);box-shadow:0 0 14px rgba(0,255,136,.45)}
+
+/* ── Panels ── */
+.panel{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:min(330px,88vw);background:rgba(4,9,20,.92);
+  border:1px solid rgba(0,212,255,.3);border-radius:16px;padding:24px 20px;
+  text-align:center;pointer-events:auto;
+}
+.btn{display:block;width:100%;background:transparent;
+  border:2px solid #00D4FF;color:#00D4FF;font-size:13px;font-weight:800;
+  letter-spacing:1.5px;text-transform:uppercase;padding:12px 18px;
+  cursor:pointer;border-radius:10px;font-family:inherit;margin-top:8px}
+.btn.r{border-color:#FF3366;color:#FF3366}
+.btn:active{opacity:.7;transform:scale(.98)}
+
+/* ── Loading pulse ── */
+@keyframes ld{0%,100%{opacity:.3;transform:translate(-50%,-50%) scale(.94)}
+  50%{opacity:.7;transform:translate(-50%,-50%) scale(1.06)}}
+#ldring{position:absolute;top:50%;left:50%;width:100px;height:100px;
+  border-radius:50%;border:2px solid rgba(0,212,255,.5);
+  animation:ld 1.8s ease-in-out infinite;display:none;pointer-events:none}
+</style>
+</head>
+<body>
+
+<video id="vid" autoplay playsinline muted></video>
+<canvas id="cv"></canvas>
+<div id="scan"></div>
+
+<div id="ui">
+  <!-- AR brackets -->
+  <div class="brk" id="bk-tl"></div><div class="brk" id="bk-tr"></div>
+  <div class="brk" id="bk-bl"></div><div class="brk" id="bk-br"></div>
+  <div id="ldring"></div>
+
+  <!-- HUD -->
+  <div id="hud-t">
+    <div style="display:flex;gap:7px">
+      <div class="st"><div class="sv" id="n-c" style="color:#FF3366">0</div><div class="sl">ครั้ง</div></div>
+      <div class="st"><div class="sv" id="n-b" style="color:#00D4FF">--</div><div class="sl">BPM</div></div>
+    </div>
+    <span style="font-size:9px;letter-spacing:2px;opacity:.38;text-transform:uppercase">LifeBeat AR</span>
+    <div class="st"><div class="sv" id="n-s" style="color:#FFB300">0</div><div class="sl">Score</div></div>
+  </div>
+  <div id="hud-b">
+    <div id="fb"></div>
+    <div id="ins">กำลังเริ่ม…</div>
+    <div id="bar-w"><div id="bar"></div></div>
+  </div>
+
+  <!-- Hand ring indicator -->
+  <div id="hring"></div>
+
+  <!-- Start panel -->
+  <div class="panel" id="p0">
+    <div style="font-size:36px;margin-bottom:10px">❤️</div>
+    <div style="font-size:22px;font-weight:900;letter-spacing:-.5px">
+      Life<span style="color:#00D4FF">Beat</span><span style="color:#FF3366"> AR</span>
+    </div>
+    <div style="font-size:10px;letter-spacing:3px;opacity:.42;text-transform:uppercase;margin:4px 0 14px">
+      AR CPR Training
+    </div>
+    <div style="font-size:12px;opacity:.72;line-height:1.8;text-align:left;
+      padding:10px 13px;background:rgba(0,212,255,.05);
+      border:1px solid rgba(0,212,255,.12);border-radius:10px;margin-bottom:16px">
+      📷 เปิดกล้องด้านหลัง → ชี้ลงพื้น<br>
+      👤 ผู้ป่วย AR ปรากฏบน Real World<br>
+      🤲 AI ตรวจจับมือ (MediaPipe Hands)<br>
+      ❤️ กด <strong>30 ครั้ง</strong> ที่ <strong>110 BPM</strong>
+    </div>
+    <button class="btn" id="btn-ar">📷 เปิดกล้อง AR</button>
+    <button class="btn r" id="btn-demo">🎮 Demo Mode</button>
+  </div>
+
+  <!-- Loading panel -->
+  <div class="panel" id="p-ld" style="display:none">
+    <div style="font-size:28px;margin-bottom:10px">🔄</div>
+    <div id="ld-txt" style="font-size:14px;font-weight:700;color:#00D4FF">กำลังโหลด…</div>
+    <div style="font-size:11px;opacity:.4;margin-top:6px">MediaPipe AI · AR Engine</div>
+  </div>
+
+  <!-- Result panel -->
+  <div class="panel" id="p-res" style="display:none"><div id="res"></div></div>
+</div>
+
+<!-- MediaPipe -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"
+  crossorigin="anonymous" onerror="window._mf=1"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"
+  crossorigin="anonymous" onerror="window._mcf=1"></script>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════
+const BMS   = 60000 / 110;   // beat interval (545 ms)
+const TOTAL = 30;             // compressions needed
+const PERSP = 0.48;           // perspective floor compression
+
+// ═══════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════
+let phase = 'init', demo = false;
+let compr = 0, sc = 0, lastT = 0;
+let bwin = [], cbpm = 0, inZ = false, cA = 0;
+let bStart = null, bP = 0, lms = [];
+let aCtx = null, prevSec = -1;
+// Device orientation (parallax effect)
+let dTilt = 0, dRoll = 0;
+
+// ═══════════════════════════════════════════════════════════
+// DOM
+// ═══════════════════════════════════════════════════════════
+const vid   = id('vid'), cv = id('cv'), G = cv.getContext('2d');
+const hudT  = id('hud-t'), hudB = id('hud-b');
+const fbEl  = id('fb'), insEl = id('ins'), barEl = id('bar');
+const p0    = id('p0'), pLd = id('p-ld'), pRes = id('p-res');
+const hring = id('hring'), ldring = id('ldring'), scan = id('scan');
+function id(x){return document.getElementById(x);}
+
+function resize(){cv.width=window.innerWidth;cv.height=window.innerHeight;}
+resize(); window.addEventListener('resize',resize);
+
+// ═══════════════════════════════════════════════════════════
+// DEVICE ORIENTATION (parallax)
+// ═══════════════════════════════════════════════════════════
+function startOrientation(){
+  // iOS 13+ needs permission
+  if(typeof DeviceOrientationEvent!=='undefined' &&
+     typeof DeviceOrientationEvent.requestPermission==='function'){
+    DeviceOrientationEvent.requestPermission().catch(()=>{});
+  }
+  window.addEventListener('deviceorientation',e=>{
+    // beta=forward/back tilt, gamma=left/right
+    if(e.beta!=null)  dTilt = (e.beta  - 45) * 0.8;   // offset from "looking at floor"
+    if(e.gamma!=null) dRoll = e.gamma * 0.5;
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// BUTTON LISTENERS
+// ═══════════════════════════════════════════════════════════
+id('btn-ar').onclick   = startAR;
+id('btn-demo').onclick = ()=>begin(true,false);
+
+// ═══════════════════════════════════════════════════════════
+// START WITH CAMERA
+// ═══════════════════════════════════════════════════════════
+async function startAR(){
+  p0.style.display='none'; pLd.style.display='block';
+  ltxt('กำลังขอสิทธิ์กล้อง…'); ldring.style.display='block';
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}
+    });
+    vid.srcObject = stream;
+    await new Promise(r=>{vid.onloadedmetadata=r;});
+    vid.play();
+    ltxt('กำลังโหลด AI Hand Tracking…');
+    const ok = await Promise.race([initMP(), new Promise(r=>setTimeout(()=>r(false),8000))]);
+    ldring.style.display='none'; pLd.style.display='none';
+    startOrientation();
+    begin(false, ok===true);
+  }catch(e){
+    ldring.style.display='none'; pLd.style.display='none';
+    begin(true, false);
+  }
+}
+function ltxt(t){id('ld-txt').textContent=t;}
+
+// ═══════════════════════════════════════════════════════════
+// MEDIAPIPE
+// ═══════════════════════════════════════════════════════════
+function initMP(){
+  return new Promise(res=>{
+    if(window._mf||typeof Hands==='undefined') return res(false);
+    try{
+      const h=new Hands({
+        locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
       });
-    </script>
-  </head>
-  
-  <body style="margin: 0px; overflow: hidden;">
+      h.setOptions({maxNumHands:2,modelComplexity:0,
+        minDetectionConfidence:.55,minTrackingConfidence:.5});
+      let first=false;
+      h.onResults(r=>{
+        lms=r.multiHandLandmarks||[];
+        checkZone();
+        if(!first){first=true;res(true);}
+      });
+      if(window._mcf||typeof Camera==='undefined') return res(false);
+      new Camera(vid,{
+        onFrame:async()=>{try{await h.send({image:vid});}catch(_){}},
+        width:640,height:480
+      }).start().catch(()=>res(false));
+    }catch(e){res(false);}
+  });
+}
 
-    <div id="instruction-banner">
-      <strong>ขั้นตอนที่ 1:</strong> กดปุ่ม <b>"Enter AR"</b> มุมขวาล่าง <br>จากนั้นถือมือถือขยับส่องไปที่พื้นช้าๆ เพื่อให้กล้องจับระนาบครับ
-    </div>
-    
-    <!-- ปุ่มกดวางร่างผู้ป่วย -->
-    <button id="place-btn" onclick="placePatient()">📍 วางร่างผู้ป่วยตรงนี้</button>
-    
-    <div id="control-panel">
-      <button class="btn" onclick="alert('✔️ พื้นที่ปลอดภัย ไม่มีสิ่งกีดขวางรอบตัวผู้ป่วย')">1. ตรวจความปลอดภัย</button>
-      <button class="btn" onclick="alert('📢 ตบไหล่เรียกแรงๆ: คุณๆ เป็นยังไงบ้าง!')">2. ตบไหล่เรียกผู้ป่วย</button>
-      <button class="btn" onclick="alert('📞 โทร 1669 และขอเครื่อง AED ด่วน!')">3. โทร 1669 / ขอ AED</button>
-      <button class="btn" id="cprBtn" onclick="toggleCPRAnimation()">4. เริ่มปั๊มหัวใจ (110 BPM)</button>
-    </div>
+// ═══════════════════════════════════════════════════════════
+// HAND ZONE CHECK
+// ═══════════════════════════════════════════════════════════
+function checkZone(){
+  if(!['pos','cpr'].includes(phase)) return;
+  const w=cv.width,h=cv.height;
+  const cz=chestRect(w,h);
+  let hit=false, wx0=null, wy0=null;
 
-    <!-- ฉากโลก AR -->
-    <a-scene webxr="optionalFeatures: hit-test;">
-      <a-entity camera position="0 1.6 0"></a-entity>
+  for(const lm of lms){
+    // back camera: no mirror needed
+    const wx=lm[0].x*w, wy=lm[0].y*h;
+    if(wx0===null){wx0=wx;wy0=wy;}
+    if(wx>cz.x&&wx<cz.x+cz.w&&wy>cz.y&&wy<cz.y+cz.h) hit=true;
+  }
+  if(wx0!==null){
+    hring.style.display='block';
+    hring.style.left=wx0+'px'; hring.style.top=wy0+'px';
+    hring.className=hit?'ok':'';
+  } else { hring.style.display='none'; }
 
-      <!-- วงแหวนเป้าเล็งที่จะขยับตามพื้นผิว -->
-      <a-entity id="reticle" ar-hit-test visible="false"
-                material="color: #00FF00; shader: flat; opacity: 0.8" 
-                geometry="primitive: ring; radiusInner: 0.12; radiusOuter: 0.18" rotation="-90 0 0">
-      </a-entity>
-      
-      <!-- โมเดลร่างผู้ป่วยจำลอง -->
-      <a-entity id="patient-body" visible="false">
-        <a-box position="0 0.1 0" width="0.4" height="0.2" depth="0.6" material="color: #2980b9;"></a-box>
-        <a-box position="0 0.1 0.5" width="0.38" height="0.18" depth="0.4" material="color: #7f8c8d;"></a-box>
-        <a-sphere position="0 0.1 -0.45" radius="0.12" material="color: #f39c12;"></a-sphere>
-        
-        <!-- เป้าหน้าอกสีแดงที่ขยับยุบลงได้ -->
-        <a-cylinder id="cpr-target" position="0 0.21 -0.05" radius="0.1" height="0.02" material="color: #c0392b;"
-                    animation="property: scale; to: 1 0.2 1; dir: alternate; dur: 272; loop: true; startEvents: startBeat; pauseEvents: stopBeat">
-        </a-cylinder>
-        <a-text value="PUSH HERE" position="0 0.24 -0.05" rotation="-90 0 0" align="center" color="#FFFFFF" scale="0.35 0.35 0.35"></a-text>
-      </a-entity>
+  inZ=hit;
+  if(hit&&phase==='pos'){
+    phase='cpr'; bStart=Date.now();
+    insEl.textContent='✅ ตำแหน่งถูก! แตะจอ/กด Space ตามจังหวะวงแหวน';
+  }
+  if(!hit&&phase==='cpr'&&compr===0&&bStart&&Date.now()-bStart<3000){
+    phase='pos'; insEl.textContent='วางมือลงบนวงกลมสีเหลืองบนหน้าอก';
+  }
+}
 
-      <a-entity light="type: ambient; intensity: 0.8;"></a-entity>
-    </a-scene>
+// Chest area in screen coordinates (where MediaPipe zones check)
+function chestRect(w,h){
+  const cx=w*.5+dRoll, cy=h*.5+dTilt;
+  const S=Math.min(w,h)*.22;
+  return{x:cx-S*.42,y:cy-S*.2*PERSP,w:S*.84,h:S*.4*PERSP};
+}
 
-    <script>
-      let isCprActive = false;
+// ═══════════════════════════════════════════════════════════
+// BEGIN GAME
+// ═══════════════════════════════════════════════════════════
+function begin(isDemo,hasMp){
+  demo=isDemo;
+  p0.style.display='none'; pLd.style.display='none';
+  hudT.style.display='flex'; hudB.style.display='block';
+  scan.style.display='block';
+  ['bk-tl','bk-tr','bk-bl','bk-br'].forEach(i=>id(i).style.display='block');
+  if(isDemo||!hasMp){
+    phase='cpr'; bStart=Date.now();
+    insEl.textContent=isDemo
+      ?'Demo — แตะจอ หรือ Space ตามจังหวะวงแหวน 110 BPM'
+      :'แตะจอ/กด Space ตามจังหวะ';
+  } else {
+    phase='pos';
+    insEl.textContent='ชี้กล้องลงพื้น แล้ววางมือบนวงกลมสีเหลือง';
+  }
+  resize(); loop();
+}
 
-      // ฟังก์ชันเมื่อกดวางร่างผู้ป่วย
-      function placePatient() {
-        if (window.lastHitPosition) {
-          const patientEl = document.querySelector('#patient-body');
-          patientEl.setAttribute('position', window.lastHitPosition);
-          patientEl.setAttribute('visible', 'true');
-          
-          window.isPlaced = true;
-          document.querySelector('#reticle').setAttribute('visible', 'false');
-          document.querySelector('#place-btn').style.display = 'none';
-          document.querySelector('#instruction-banner').style.display = 'none';
-          document.querySelector('#control-panel').style.display = 'flex';
-        }
-      }
+// ═══════════════════════════════════════════════════════════
+// AUDIO
+// ═══════════════════════════════════════════════════════════
+function beep(hz=700,ms=70){
+  try{
+    if(!aCtx) aCtx=new(window.AudioContext||window.webkitAudioContext)();
+    if(aCtx.state==='suspended') aCtx.resume();
+    const o=aCtx.createOscillator(),g=aCtx.createGain();
+    o.connect(g); g.connect(aCtx.destination);
+    o.frequency.value=hz;
+    g.gain.setValueAtTime(.1,aCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001,aCtx.currentTime+ms/1000);
+    o.start(); o.stop(aCtx.currentTime+ms/1000);
+  }catch(_){}
+}
 
-      // ฟังก์ชันเปิด/ปิด จังหวะปั๊มหัวใจ
-      function toggleCPRAnimation() {
-        const cprTarget = document.querySelector('#cpr-target');
-        const cprBtn = document.querySelector('#cprBtn');
-        if (!isCprActive) {
-          cprTarget.emit('startBeat');
-          cprBtn.innerHTML = "หยุดปั๊มหัวใจ";
-          cprBtn.style.background = "#555555";
-          isCprActive = true;
-        } else {
-          cprTarget.emit('stopBeat');
-          cprTarget.setAttribute('scale', '1 1 1');
-          cprBtn.innerHTML = "4. เริ่มปั๊มหัวใจ (110 BPM)";
-          cprBtn.style.background = "#D32F2F";
-          isCprActive = false;
-        }
-      }
-    </script>
-  </body>
+// ═══════════════════════════════════════════════════════════
+// INPUT
+// ═══════════════════════════════════════════════════════════
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'){e.preventDefault();press();}
+});
+cv.addEventListener('pointerdown',e=>{e.preventDefault();press();});
+
+function press(){
+  if(phase!=='cpr'||compr>=TOTAL) return;
+  const now=Date.now();
+  if(now-lastT<200) return;
+  const iv=lastT>0?now-lastT:BMS; lastT=now;
+  const b=Math.round(60000/iv);
+  bwin.push(b); if(bwin.length>6)bwin.shift();
+  cbpm=Math.round(bwin.reduce((a,c)=>a+c,0)/bwin.length);
+
+  let pts,hz,txt,col;
+  if(cbpm>=100&&cbpm<=120){pts=12;hz=1050;txt='PERFECT!';col='#FFB300';}
+  else if(cbpm>=90&&cbpm<=130){pts=6;hz=780;txt='GOOD';col='#00D4FF';}
+  else if(cbpm<90){pts=2;hz=340;txt='ช้าไป!';col='#FF9900';}
+  else{pts=2;hz=340;txt='เร็วไป!';col='#FF9900';}
+
+  beep(hz,65); cA=1; compr++; sc+=pts;
+  fbEl.textContent=txt; fbEl.style.color=col;
+  clearTimeout(fbEl._t);
+  fbEl._t=setTimeout(()=>fbEl.textContent='',680);
+  id('n-c').textContent=compr;
+  id('n-b').textContent=cbpm||'--';
+  id('n-s').textContent=sc;
+  // Haptic feedback on mobile
+  if(navigator.vibrate) navigator.vibrate(30);
+
+  if(compr>=TOTAL){phase='done';bStart=null;setTimeout(showRes,900);}
+}
+
+// ═══════════════════════════════════════════════════════════
+// RESULT
+// ═══════════════════════════════════════════════════════════
+function showRes(){
+  const e=sc>=380?'🏆':sc>=260?'🥇':sc>=140?'🥈':'🥉';
+  const n=sc>=380?'LifeBeat Hero':sc>=260?'Gold Responder':sc>=140?'Silver Responder':'Bronze Responder';
+  const cl=sc>=380?'#FFD700':sc>=260?'#FFC107':sc>=140?'#C0C0C0':'#CD7F32';
+  id('res').innerHTML=`
+    <div style="font-size:50px;margin-bottom:8px">${e}</div>
+    <div style="font-size:15px;font-weight:800;color:${cl};letter-spacing:1px;margin-bottom:4px">${n}</div>
+    <div style="font-size:64px;font-weight:900;line-height:1">${sc}</div>
+    <div style="font-size:9px;opacity:.35;letter-spacing:2px;text-transform:uppercase;margin:4px 0 8px">คะแนน</div>
+    <div style="font-size:12px;opacity:.6;margin-bottom:18px">${TOTAL} ครั้ง · BPM ${cbpm||'--'}</div>
+    <button class="btn" onclick="location.reload()">🔄 เล่นอีกครั้ง</button>`;
+  pRes.style.display='block';
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER LOOP
+// ═══════════════════════════════════════════════════════════
+function loop(){ draw(); requestAnimationFrame(loop); }
+
+let prevSector=-1;
+function draw(){
+  const w=cv.width,h=cv.height;
+  G.clearRect(0,0,w,h);
+
+  // Demo: dark background + perspective grid
+  if(demo){
+    G.fillStyle='#050A14'; G.fillRect(0,0,w,h);
+    drawFloorGrid(w,h);
+  } else {
+    // On real camera: draw subtle floor plane hint
+    drawFloorHint(w,h);
+  }
+
+  cA=Math.max(0,cA-.06);
+
+  if(bStart){
+    bP=((Date.now()-bStart)%BMS)/BMS;
+    const sec=Math.floor(bP*8);
+    if(sec!==prevSector&&bP<.125&&compr>0) beep(440,32);
+    prevSector=sec;
+  }
+
+  // Patient with floor perspective
+  drawPatient(w,h);
+
+  // Hand tracking overlay
+  if(lms.length) drawHands(w,h);
+
+  // Rhythm ring (after patient starts)
+  if(['cpr','done'].includes(phase)&&compr>0) drawRing(w,h);
+
+  // Positioning box (before CPR, when MP active)
+  if(phase==='pos') drawPosBox(w,h);
+
+  if(phase==='cpr') barEl.style.width=(bP*100)+'%';
+}
+
+// ═══════════════════════════════════════════════════════════
+// FLOOR EFFECTS
+// ═══════════════════════════════════════════════════════════
+
+// Demo mode: full perspective grid
+function drawFloorGrid(w,h){
+  const vpx=w*.5, vpy=h*.18;  // vanishing point
+  const floor_y=h*.88;
+
+  G.save();
+  // Radial lines
+  G.strokeStyle='rgba(0,212,255,.055)'; G.lineWidth=1;
+  for(let i=0;i<=8;i++){
+    const x=w*(i/8);
+    G.beginPath(); G.moveTo(vpx+(x-vpx)*.28,vpy+(floor_y-vpy)*.28);
+    G.lineTo(x,floor_y); G.stroke();
+  }
+  // Horizontal lines (perspective)
+  [.35,.5,.65,.78,.9].forEach(t=>{
+    const y=vpy+(floor_y-vpy)*t;
+    G.beginPath(); G.moveTo(0,y); G.lineTo(w,y); G.stroke();
+  });
+  G.restore();
+}
+
+// Camera mode: just a subtle ellipse showing ground plane
+function drawFloorHint(w,h){
+  const cx=w*.5+dRoll, cy=h*.58+dTilt;
+  const rx=Math.min(w,h)*.55, ry=rx*PERSP*.45;
+  const gr=G.createRadialGradient(cx,cy,0,cx,cy,rx);
+  gr.addColorStop(0,'rgba(0,212,255,.06)');
+  gr.addColorStop(1,'rgba(0,212,255,0)');
+  G.beginPath(); G.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);
+  G.fillStyle=gr; G.fill();
+}
+
+// ═══════════════════════════════════════════════════════════
+// DRAW PATIENT  ← THE KEY FUNCTION
+//   Uses perspective transform: patient drawn in "floor space",
+//   then compressed vertically (PERSP factor) to look like
+//   they're lying flat on the ground — same trick as TikTok AR filters.
+// ═══════════════════════════════════════════════════════════
+function drawPatient(w,h){
+  // The center of the patient on screen
+  // dRoll/dTilt give a parallax offset from device orientation
+  const cx = w*.5 + dRoll;
+  const cy = h*.5 + dTilt;
+  const S  = Math.min(w,h)*.26;   // scale unit
+  const dp = cA * S * .045;       // chest press animation
+
+  G.save();
+
+  // ── Step 1: translate to patient center, apply perspective ──
+  G.translate(cx, cy);
+  G.scale(1, PERSP);   // ← THIS makes it look like lying on floor
+
+  // ── Step 2: floor shadow (in perspective space) ──
+  G.globalAlpha=.28;
+  G.fillStyle='#000';
+  G.beginPath();
+  G.ellipse(0, S*.12, S*1.35, S*.24, 0, 0, Math.PI*2);
+  G.fill();
+  G.globalAlpha=.9;
+
+  // ── Step 3: draw the body ──
+
+  // LEGS
+  fRR(-S*.28, S*.62,  S*.22, S*.70, S*.10, '#1D2F50');
+  fRR( S*.06, S*.62,  S*.22, S*.70, S*.10, '#1A2848');
+  // Shoes
+  fRR(-S*.31, S*1.28, S*.28, S*.13, S*.06, '#0D1220');
+  fRR( S*.03, S*1.28, S*.28, S*.13, S*.06, '#0D1220');
+
+  // TORSO  (shifts down when pressed = dp)
+  fRR(-S*.47, -S*.52+dp, S*.94, S*1.18, S*.13, '#2A55A0');
+  sRR(-S*.47, -S*.52+dp, S*.94, S*1.18, S*.13, 'rgba(120,180,255,.35)', 1.5);
+  // shirt detail
+  G.globalAlpha=.08;
+  fRR(-S*.08, -S*.50+dp, S*.16, S*.44, S*.05, '#fff');
+  G.globalAlpha=.9;
+
+  // ARMS
+  fRR(-S*.76, -S*.36, S*.30, S*.92, S*.12, '#2A55A0');
+  fRR( S*.46, -S*.36, S*.30, S*.92, S*.12, '#24499A');
+  // Hands
+  fEl(-S*.61, S*.62, S*.11, S*.09, '#FFCFA0');
+  fEl( S*.62, S*.62, S*.11, S*.09, '#FFBF8C');
+
+  // NECK + HEAD
+  fRR(-S*.08, -S*.56+dp, S*.16, S*.09, S*.04, '#FFCFA0');
+  fEl(0, -S*.80, S*.27, S*.35, '#FFCFA0');
+  // Hair
+  G.beginPath();
+  G.ellipse(0, -S*.98, S*.25, S*.20, 0, Math.PI, 0);
+  G.fillStyle='#2A180B'; G.fill();
+  // Ears
+  fEl(-S*.27, -S*.80, S*.055, S*.08, '#FFBF8C');
+  fEl( S*.27, -S*.80, S*.055, S*.08, '#FFBF8C');
+  // Closed eyes (unconscious)
+  G.strokeStyle='#886655'; G.lineWidth=1.5;
+  G.beginPath(); G.arc(-S*.09,-S*.80,S*.055,0,Math.PI); G.stroke();
+  G.beginPath(); G.arc( S*.09,-S*.80,S*.055,0,Math.PI); G.stroke();
+  // Mouth
+  G.strokeStyle='rgba(140,90,70,.5)'; G.lineWidth=1.2;
+  G.beginPath();
+  G.moveTo(-S*.05,-S*.68); G.lineTo(S*.05,-S*.68); G.stroke();
+
+  // ── Step 4: Hologram scanlines (horizontal stripes on body) ──
+  G.globalAlpha=.055;
+  G.fillStyle='#000';
+  for(let y=-S*.52; y<S*.72; y+=6){
+    fRR(-S*.48, y+dp, S*.94, 2, 0, '#000');
+  }
+  G.globalAlpha=.9;
+
+  // ── Step 5: Glowing cyan outline on body (AR look) ──
+  G.globalAlpha=.18;
+  sRR(-S*.47,-S*.52+dp,S*.94,S*1.18,S*.13,'#00D4FF',1);
+  G.globalAlpha=.9;
+
+  G.restore();  // ← end perspective transform
+
+  // ── Step 6: Chest target ── (drawn in screen space, ellipse = perspective correct)
+  const chestSY = cy + (-S*.04+dp)*PERSP;
+  drawChest(cx, chestSY, S);
+}
+
+// ═══════════════════════════════════════════════════════════
+// CHEST TARGET (perspective ellipse — looks like it's ON the floor)
+// ═══════════════════════════════════════════════════════════
+function drawChest(cx,cy,S){
+  const Rx=S*.25;          // horizontal radius
+  const Ry=Rx*PERSP;       // vertical radius = compressed (perspective)
+  const p=(Math.sin(Date.now()/430)+1)*.5;
+  const act=inZ||demo||compr>0;
+  const [r,g,b]=act?[0,255,136]:[255,179,0];
+
+  // Outer glow (also ellipse)
+  const gr=G.createRadialGradient(cx,cy,0,cx,cy,Rx*2.6);
+  gr.addColorStop(0,`rgba(${r},${g},${b},${.14+p*.08})`);
+  gr.addColorStop(1,`rgba(${r},${g},${b},0)`);
+  G.beginPath(); G.ellipse(cx,cy,Rx*2.6,Ry*2.6,0,0,Math.PI*2);
+  G.fillStyle=gr; G.fill();
+
+  // Dashed ring (ellipse)
+  G.beginPath(); G.ellipse(cx,cy,Rx,Ry,0,0,Math.PI*2);
+  G.strokeStyle=`rgba(${r},${g},${b},${.52+p*.38})`;
+  G.lineWidth=2.5; G.setLineDash([8,5]); G.stroke(); G.setLineDash([]);
+
+  // Center dot
+  G.beginPath(); G.ellipse(cx,cy,Rx*.17,Ry*.17,0,0,Math.PI*2);
+  G.fillStyle=`rgba(${r},${g},${b},${.65+p*.28})`; G.fill();
+
+  // Crosshair (perspective-aware)
+  G.strokeStyle=`rgba(${r},${g},${b},${.30+p*.18})`; G.lineWidth=1.5;
+  G.beginPath();
+  G.moveTo(cx-Rx*.44,cy); G.lineTo(cx+Rx*.44,cy);  // horizontal line
+  G.moveTo(cx,cy-Ry*.44); G.lineTo(cx,cy+Ry*.44);  // vertical (short, perspective)
+  G.stroke();
+
+  // Label
+  const fs=Math.max(11,Math.round(Rx*.4));
+  G.font=`bold ${fs}px system-ui`;
+  G.fillStyle=`rgba(${r},${g},${b},${.85+p*.1})`;
+  G.textAlign='center'; G.textBaseline='top';
+  G.fillText(act?'กดที่นี่':'วางมือที่นี่', cx, cy+Ry*1.3);
+  G.textBaseline='alphabetic';
+
+  // Press flash + ripple
+  if(cA>.04){
+    G.beginPath(); G.ellipse(cx,cy,Rx*(1-cA*.2),Ry*(1-cA*.2),0,0,Math.PI*2);
+    G.strokeStyle=`rgba(255,255,255,${cA*.55})`; G.lineWidth=3.5; G.stroke();
+    G.beginPath(); G.ellipse(cx,cy,Rx*(1+cA*.85),Ry*(1+cA*.85),0,0,Math.PI*2);
+    G.strokeStyle=`rgba(${r},${g},${b},${cA*.35})`; G.lineWidth=1.5; G.stroke();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// RHYTHM RING (also perspective ellipse)
+// ═══════════════════════════════════════════════════════════
+function drawRing(w,h){
+  const cx=w*.5+dRoll, cy=h*.5+dTilt;
+  const Rx=Math.min(w,h)*.26*.25;
+  const Ry=Rx*PERSP;
+  const near=Math.abs(bP-.5)<.13;
+  const sc2=bP*2.1, op=Math.max(0,1-bP*1.3);
+  G.beginPath(); G.ellipse(cx,cy+(-S_dummy*.04)*PERSP,Rx*sc2,Ry*sc2,0,0,Math.PI*2);
+  G.strokeStyle=near?`rgba(0,255,136,${op})`:`rgba(0,212,255,${op})`;
+  G.lineWidth=near?3:2; G.stroke();
+}
+// tiny helper for ring center offset
+const S_dummy_ref={get S_dummy(){return Math.min(cv.width,cv.height)*.26;}};
+Object.defineProperty(window,'S_dummy',{get:()=>Math.min(cv.width,cv.height)*.26});
+
+// ═══════════════════════════════════════════════════════════
+// HAND OVERLAY
+// ═══════════════════════════════════════════════════════════
+function drawHands(w,h){
+  for(const lm of lms){
+    const wx=lm[0].x*w, wy=lm[0].y*h;
+    G.beginPath(); G.arc(wx,wy,19,0,Math.PI*2);
+    G.fillStyle=inZ?'rgba(0,255,136,.14)':'rgba(0,212,255,.11)'; G.fill();
+    G.strokeStyle=inZ?'#00FF88':'#00D4FF'; G.lineWidth=2; G.stroke();
+    for(const fi of [4,8,12,16,20]){
+      const fp=lm[fi];
+      G.beginPath(); G.arc(fp.x*w,fp.y*h,5,0,Math.PI*2);
+      G.fillStyle=inZ?'rgba(0,255,136,.7)':'rgba(0,212,255,.6)'; G.fill();
+    }
+    G.strokeStyle=inZ?'rgba(0,255,136,.18)':'rgba(0,212,255,.15)'; G.lineWidth=1.5;
+    G.beginPath();
+    [0,1,5,9,13,17,0].forEach((fi,i)=>{
+      const p=lm[fi]; i===0?G.moveTo(p.x*w,p.y*h):G.lineTo(p.x*w,p.y*h);
+    });
+    G.stroke();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// POSITIONING GUIDE
+// ═══════════════════════════════════════════════════════════
+function drawPosBox(w,h){
+  const cz=chestRect(w,h);
+  const p=(Math.sin(Date.now()/500)+1)*.5;
+  G.strokeStyle=`rgba(255,179,0,${.38+p*.38})`; G.lineWidth=1.8;
+  G.setLineDash([8,6]); G.strokeRect(cz.x,cz.y,cz.w,cz.h); G.setLineDash([]);
+  G.fillStyle=`rgba(255,179,0,${.68+p*.22})`;
+  G.font='bold 13px system-ui';
+  G.textAlign='center'; G.textBaseline='bottom';
+  G.fillText('วางมือที่นี่',cz.x+cz.w*.5,cz.y-7);
+  G.textBaseline='alphabetic';
+}
+
+// ═══════════════════════════════════════════════════════════
+// CANVAS HELPERS
+// ═══════════════════════════════════════════════════════════
+function mkRR(x,y,w,h,r){
+  const R=Math.min(r,w/2,h/2),p=new Path2D();
+  p.moveTo(x+R,y); p.arcTo(x+w,y,x+w,y+h,R); p.arcTo(x+w,y+h,x,y+h,R);
+  p.arcTo(x,y+h,x,y,R); p.arcTo(x,y,x+w,y,R); p.closePath(); return p;
+}
+function fRR(x,y,w,h,r,c){G.fillStyle=c;G.fill(mkRR(x,y,w,h,r));}
+function sRR(x,y,w,h,r,c,lw){G.strokeStyle=c;G.lineWidth=lw;G.stroke(mkRR(x,y,w,h,r));}
+function fEl(x,y,rx,ry,c){
+  G.beginPath();G.ellipse(x,y,rx,ry,0,0,Math.PI*2);G.fillStyle=c;G.fill();
+}
+</script>
+</body>
 </html>

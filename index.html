@@ -475,7 +475,7 @@ function startCPR(){
 function cprMotion(w,h){
   const B=getB();
   const p=ptr();
-  const cx=aX(),cy=aY()-B*.04*PERSP;
+  const cx=aX(),cy=aY()+(-B*.40)*PERSP;
   const zR=B*.5;
   inChest=false;
 
@@ -533,22 +533,22 @@ function registerCompression(){
 // AED
 // ═══════════════════════════════════════════════════════
 const AED_Z=[
-  {id:'a0',label:'บนอกขวา',dx:.17,dy:-.24,ok:true},
-  {id:'a1',label:'กลางอก',dx:0,dy:-.06,ok:false},
-  {id:'a2',label:'ชายโครงซ้าย',dx:-.24,dy:.10,ok:true},
-  {id:'a3',label:'หน้าท้อง',dx:0,dy:.32,ok:false},
+  {id:'a0',label:'ใต้ไหปลาร้า\nขวา',dx:.20,dy:-.62,ok:true},
+  {id:'a1',label:'กลางอก',dx:0,dy:-.40,ok:false},
+  {id:'a2',label:'ชายโครง\nซ้าย',dx:-.20,dy:-.16,ok:true},
+  {id:'a3',label:'หน้าท้อง',dx:0,dy:.14,ok:false},
 ];
 
 function startAED(){
   phase='aed';aedPlaced=new Set();aedArmed=false;
   setTag('SCENE 4 — AED');setDots(3);
-  setMsg('⚡ ค้างมือบน 2 ตำแหน่งที่ถูกต้อง','บนอกขวา + ชายโครงซ้าย');
+  setMsg('⚡ ค้างมือบน 2 ตำแหน่งที่ถูกต้อง','ใต้ไหปลาร้าขวา + ชายโครงซ้าย');
 }
 
 function drawAEDScene(w,h){
   const B=getB(),AXX=aX(),AYY=aY();
   const zones=AED_Z.map(z=>({id:z.id,label:z.label,ok:z.ok,
-    x:AXX+z.dx*B,y:AYY+z.dy*B*PERSP*2.2,r:34}));
+    x:AXX+z.dx*B,y:AYY+z.dy*B*PERSP*matScale,r:30}));
   for(const z of zones){
     const placed=aedPlaced.has(z.id);
     const col=placed?(aedArmed?'#00FF88':'#FFB300'):'#00D4FF';
@@ -757,38 +757,74 @@ function drawPatient(w,h){
   G.scale(matScale,matScale);
   G.scale(1,PERSP);
 
-  G.globalAlpha=.22;G.fillStyle='#000';
-  G.beginPath();G.ellipse(0,B*.14,B*1.32,B*.24,0,0,Math.PI*2);G.fill();
-  G.globalAlpha=.88;
+  G.globalAlpha=.24;G.fillStyle='#000';
+  G.beginPath();G.ellipse(0,B*.05,B*.62,B*1.7,0,0,Math.PI*2);G.fill();
+  G.globalAlpha=.92;
 
-  fRR(-B*.28,B*.62,B*.22,B*.70,B*.10,'#1D2F50');
-  fRR( B*.06,B*.62,B*.22,B*.70,B*.10,'#1A2848');
-  fRR(-B*.31,B*1.28,B*.28,B*.13,B*.06,'#0D1220');
-  fRR( B*.03,B*1.28,B*.28,B*.13,B*.06,'#0D1220');
-  fRR(-B*.47,-B*.52+dp,B*.94,B*1.18,B*.13,'#2A55A0');
-  sRR(-B*.47,-B*.52+dp,B*.94,B*1.18,B*.13,'rgba(120,180,255,.3)',1.5);
-  G.globalAlpha=.08;fRR(-B*.08,-B*.50+dp,B*.16,B*.44,B*.05,'#fff');G.globalAlpha=.88;
-  fRR(-B*.76,-B*.36,B*.30,B*.92,B*.12,'#2A55A0');
-  fRR( B*.46,-B*.36,B*.30,B*.92,B*.12,'#24499A');
-  fEl(-B*.61,B*.62,B*.11,B*.09,'#FFCFA0');
-  fEl( B*.61,B*.62,B*.11,B*.09,'#FFBF8C');
-  fRR(-B*.08,-B*.56+dp,B*.16,B*.09,B*.04,'#FFCFA0');
-  fEl(0,-B*.80,B*.27,B*.35,'#FFCFA0');
-  G.beginPath();G.ellipse(0,-B*.98,B*.25,B*.20,0,Math.PI,0);
+  // ───────────────────────────────────────────────
+  // PATIENT LYING FLAT ON BACK (supine)
+  // Vertical layout: head far (top, -Y), feet near (bottom, +Y)
+  // CPR chest target sits at body center
+  // ───────────────────────────────────────────────
+  const SKIN='#FFCFA0', SKIN2='#F0BC8C', SHIRT='#2A55A0', SHIRT2='#244A92', PANTS='#1D2F50';
+
+  // HEAD (far end, top)
+  fEl(0,-B*1.32,B*.23,B*.27,SKIN);
+  G.beginPath();G.ellipse(0,-B*1.45,B*.23,B*.17,0,Math.PI,0);
   G.fillStyle='#2A180B';G.fill();
-  fEl(-B*.27,-B*.80,B*.055,B*.08,'#FFBF8C');
-  fEl( B*.27,-B*.80,B*.055,B*.08,'#FFBF8C');
-  G.strokeStyle='#886655';G.lineWidth=1.5;
-  G.beginPath();G.arc(-B*.09,-B*.80,B*.055,0,Math.PI);G.stroke();
-  G.beginPath();G.arc( B*.09,-B*.80,B*.055,0,Math.PI);G.stroke();
-  G.strokeStyle='rgba(140,90,70,.5)';G.lineWidth=1.2;
-  G.beginPath();G.moveTo(-B*.05,-B*.68);G.lineTo(B*.05,-B*.68);G.stroke();
+  G.strokeStyle='rgba(120,80,60,.55)';G.lineWidth=1.4;
+  G.beginPath();G.arc(-B*.08,-B*1.30,B*.04,0,Math.PI);G.stroke();
+  G.beginPath();G.arc( B*.08,-B*1.30,B*.04,0,Math.PI);G.stroke();
+  G.beginPath();G.moveTo(0,-B*1.26);G.lineTo(0,-B*1.22);G.stroke();
 
+  // NECK
+  fRR(-B*.10,-B*1.18,B*.20,B*.14,B*.05,SKIN2);
+
+  // SHOULDERS
+  fRR(-B*.42,-B*1.10,B*.84,B*.30,B*.14,SHIRT);
+
+  // ARMS resting at sides
+  fRR(-B*.58,-B*1.02,B*.20,B*.66,B*.09,SHIRT2);
+  fRR( B*.38,-B*1.02,B*.20,B*.66,B*.09,SHIRT2);
+  fRR(-B*.60,-B*.40,B*.17,B*.52,B*.08,SKIN2);
+  fRR( B*.43,-B*.40,B*.17,B*.52,B*.08,SKIN2);
+  fEl(-B*.51,B*.16,B*.10,B*.12,SKIN);
+  fEl( B*.51,B*.16,B*.10,B*.12,SKIN);
+
+  // TORSO / CHEST (CPR zone, center)
+  fRR(-B*.38,-B*.84+dp,B*.76,B*.96,B*.12,SHIRT);
+  sRR(-B*.38,-B*.84+dp,B*.76,B*.96,B*.12,'rgba(120,180,255,.3)',1.5);
+  G.globalAlpha=.10;
+  fRR(-B*.04,-B*.80+dp,B*.08,B*.86,B*.03,'#fff');
+  G.globalAlpha=.92;
+  G.globalAlpha=.07;
+  for(let i=0;i<3;i++) fRR(-B*.30,-B*.55+dp+i*B*.14,B*.60,B*.05,B*.02,'#000');
+  G.globalAlpha=.92;
+
+  // HIPS
+  fRR(-B*.36,B*.12,B*.72,B*.34,B*.10,PANTS);
+
+  // LEGS toward camera
+  fRR(-B*.34,B*.42,B*.30,B*.86,B*.12,PANTS);
+  fRR( B*.04,B*.42,B*.30,B*.86,B*.12,'#19294A');
+  G.globalAlpha=.10;
+  fEl(-B*.19,B*.70,B*.13,B*.10,'#fff');
+  fEl( B*.19,B*.70,B*.13,B*.10,'#fff');
+  G.globalAlpha=.92;
+  // SHOES nearest
+  fEl(-B*.19,B*1.32,B*.16,B*.20,'#0D1220');
+  fEl( B*.19,B*1.32,B*.16,B*.20,'#0D1220');
+  G.globalAlpha=.18;
+  fEl(-B*.19,B*1.26,B*.10,B*.08,'#fff');
+  fEl( B*.19,B*1.26,B*.10,B*.08,'#fff');
+  G.globalAlpha=.92;
+
+  // Danger pulse around head (safety scenes)
   if(['safety0','safety1','safety2','mat'].includes(phase)){
     const pu=(Math.sin(Date.now()/400)+1)*.5;
     G.globalAlpha=.6*pu;G.strokeStyle='#FF3366';G.lineWidth=2;
-    G.beginPath();G.ellipse(0,-B*.80,B*.38+B*.08*pu,B*.48+B*.10*pu,0,0,Math.PI*2);G.stroke();
-    G.globalAlpha=.88;
+    G.beginPath();G.ellipse(0,-B*1.32,B*.35+B*.08*pu,B*.40+B*.10*pu,0,0,Math.PI*2);G.stroke();
+    G.globalAlpha=.92;
   }
   G.restore();
 
@@ -796,8 +832,9 @@ function drawPatient(w,h){
 }
 
 function drawChestTarget(B,dp){
-  const Rx=B*matScale*.42,Ry=Rx*PERSP;
-  const cx=aX(),cy=aY()+(-B*.04+dp)*PERSP*matScale;
+  const Rx=B*matScale*.34,Ry=Rx*PERSP;
+  // chest sits on upper torso of the lying body (body-Y ≈ -0.40)
+  const cx=aX(),cy=aY()+(-B*.40+dp)*PERSP*matScale;
   const p=(Math.sin(Date.now()/430)+1)*.5;
   const act=inChest&&(clasped||demo);
   const [r,g,b]=act?[0,255,136]:[255,179,0];

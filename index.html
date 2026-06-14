@@ -5,63 +5,122 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>LifeBeat AR CPR — Hands Free</title>
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800;900&family=Noto+Sans+Thai:wght@400;500;700;900&display=swap');
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;overflow:hidden;background:#000;
-  font-family:system-ui,-apple-system,sans-serif;color:#fff;
+:root{
+  --bg:#0A0E12; --panel:#10161E; --panel2:#0C1117;
+  --red:#FF2D55; --red-dim:#7A1830;
+  --vital:#00E5A0; --amber:#FFB000;
+  --ink:#EAF1F6; --muted:#64788A; --line:rgba(120,150,170,.14);
+  --mono:ui-monospace,'SF Mono',Menlo,monospace;
+  --thai:'Noto Sans Thai',system-ui,sans-serif;
+  --disp:'Archivo','Noto Sans Thai',system-ui,sans-serif;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
+  font-family:var(--thai);color:var(--ink);
   -webkit-tap-highlight-color:transparent;user-select:none;touch-action:none}
 #vid{position:fixed;inset:0;width:100%;height:100%;object-fit:cover}
 #cv{position:fixed;inset:0;width:100%;height:100%}
 #ui{position:fixed;inset:0;pointer-events:none}
-.brk{position:absolute;width:22px;height:22px;opacity:0;transition:opacity .4s;pointer-events:none}
-.brk.show{opacity:.6}
-#bk-tl{top:10px;left:10px;border-top:2px solid #00D4FF;border-left:2px solid #00D4FF}
-#bk-tr{top:10px;right:10px;border-top:2px solid #00D4FF;border-right:2px solid #00D4FF}
-#bk-bl{bottom:10px;left:10px;border-bottom:2px solid #00D4FF;border-left:2px solid #00D4FF}
-#bk-br{bottom:10px;right:10px;border-bottom:2px solid #00D4FF;border-right:2px solid #00D4FF}
+
+.brk{position:absolute;width:20px;height:20px;opacity:0;transition:opacity .4s;pointer-events:none}
+.brk.show{opacity:.5}
+#bk-tl{top:12px;left:12px;border-top:1.5px solid var(--vital);border-left:1.5px solid var(--vital)}
+#bk-tr{top:12px;right:12px;border-top:1.5px solid var(--vital);border-right:1.5px solid var(--vital)}
+#bk-bl{bottom:12px;left:12px;border-bottom:1.5px solid var(--vital);border-left:1.5px solid var(--vital)}
+#bk-br{bottom:12px;right:12px;border-bottom:1.5px solid var(--vital);border-right:1.5px solid var(--vital)}
+
+/* HUD — monitor readout style */
 #hud-t{position:absolute;top:0;left:0;right:0;
-  padding:max(env(safe-area-inset-top),10px) 14px 10px;
-  background:linear-gradient(rgba(0,0,0,.6),transparent);
-  display:none;justify-content:space-between;align-items:center}
-.st{background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.2);
-  border-radius:10px;padding:5px 11px;text-align:center;min-width:56px}
-.sv{font-size:18px;font-weight:900;line-height:1.15}
-.sl{font-size:8px;opacity:.5;letter-spacing:1.5px;text-transform:uppercase;margin-top:1px}
-#scene-tag{position:absolute;top:max(env(safe-area-inset-top),12px);left:50%;
-  transform:translateX(-50%);font-size:10px;letter-spacing:3px;opacity:0;
-  text-transform:uppercase;background:rgba(0,0,0,.45);
-  border:1px solid rgba(0,212,255,.3);border-radius:20px;padding:4px 14px;
-  transition:opacity .5s;white-space:nowrap;pointer-events:none}
-#scene-tag.show{opacity:.85}
-#dots{position:absolute;top:max(env(safe-area-inset-top),42px);left:50%;
-  transform:translateX(-50%);display:none;gap:6px}
-.dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.25);transition:background .3s}
-.dot.on{background:#00D4FF}.dot.ok{background:#00FF88}
-#msg{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 20px);
-  left:0;right:0;text-align:center;padding:0 20px;display:none}
-#fb{font-size:26px;font-weight:900;letter-spacing:2px;min-height:32px;margin-bottom:4px;
-  text-shadow:0 1px 8px rgba(0,0,0,.8)}
-#ins{font-size:14px;line-height:1.6;opacity:.95;font-weight:600;
-  text-shadow:0 1px 6px rgba(0,0,0,.9)}
-#sub{font-size:11px;opacity:.55;margin-top:4px;text-shadow:0 1px 4px rgba(0,0,0,.9)}
-#posture{position:absolute;top:max(env(safe-area-inset-top),68px);left:50%;
-  transform:translateX(-50%);font-size:12px;font-weight:800;
-  background:rgba(0,0,0,.5);border-radius:18px;padding:5px 14px;
-  display:none;border:1px solid rgba(255,179,0,.4);white-space:nowrap}
-#posture.good{border-color:rgba(0,255,136,.55);color:#00FF88}
+  padding:max(env(safe-area-inset-top),12px) 14px 12px;
+  background:linear-gradient(rgba(10,14,18,.82),transparent);
+  display:none;justify-content:space-between;align-items:flex-start}
+.st{text-align:center;min-width:54px}
+.st .sv{font-family:var(--mono);font-size:21px;font-weight:700;line-height:1;
+  font-variant-numeric:tabular-nums}
+.st .sl{font-family:var(--mono);font-size:8px;color:var(--muted);
+  letter-spacing:2px;text-transform:uppercase;margin-top:3px}
+.hud-grp{display:flex;gap:14px}
+
+#scene-tag{position:absolute;top:max(env(safe-area-inset-top),14px);left:50%;
+  transform:translateX(-50%);font-family:var(--mono);font-size:10px;letter-spacing:3px;
+  opacity:0;text-transform:uppercase;color:var(--ink);
+  display:flex;align-items:center;gap:7px;pointer-events:none;transition:opacity .5s;white-space:nowrap}
+#scene-tag::before{content:'';width:6px;height:6px;border-radius:50%;
+  background:var(--red);box-shadow:0 0 8px var(--red);animation:blip 1.4s infinite}
+@keyframes blip{0%,100%{opacity:1}50%{opacity:.25}}
+#scene-tag.show{opacity:.9}
+
+#dots{position:absolute;top:max(env(safe-area-inset-top),44px);left:50%;
+  transform:translateX(-50%);display:none;gap:5px}
+.dot{width:18px;height:3px;border-radius:0;background:rgba(120,150,170,.25);transition:background .3s}
+.dot.on{background:var(--red)}.dot.ok{background:var(--vital)}
+
+#msg{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 22px);
+  left:0;right:0;text-align:center;padding:0 22px;display:none}
+#fb{font-family:var(--disp);font-size:27px;font-weight:900;letter-spacing:1px;
+  min-height:33px;margin-bottom:5px;text-shadow:0 2px 12px rgba(0,0,0,.9)}
+#ins{font-size:14px;line-height:1.55;font-weight:700;
+  text-shadow:0 1px 8px rgba(0,0,0,.95)}
+#sub{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:5px;
+  letter-spacing:.3px;text-shadow:0 1px 6px rgba(0,0,0,.95)}
+
+#posture{position:absolute;top:max(env(safe-area-inset-top),70px);left:50%;
+  transform:translateX(-50%);font-size:12px;font-weight:700;
+  background:rgba(10,14,18,.72);border-radius:2px;padding:6px 14px;
+  display:none;border:1px solid var(--amber);border-left-width:3px;
+  color:var(--amber);white-space:nowrap;backdrop-filter:blur(4px)}
+#posture.good{border-color:var(--vital);color:var(--vital)}
+
+/* PANELS — instrument console */
 .panel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  width:min(330px,88vw);background:rgba(4,9,20,.93);
-  border:1px solid rgba(0,212,255,.3);border-radius:16px;padding:24px 20px;
-  text-align:center;pointer-events:auto}
-.btn{display:block;width:100%;background:transparent;border:2px solid #00D4FF;
-  color:#00D4FF;font-size:13px;font-weight:800;letter-spacing:1.5px;
-  text-transform:uppercase;padding:12px 18px;cursor:pointer;border-radius:10px;
-  font-family:inherit;margin-top:8px}
-.btn.r{border-color:#FF3366;color:#FF3366}
-.btn:active{opacity:.7}
+  width:min(340px,90vw);background:var(--panel);
+  border:1px solid var(--line);border-radius:4px;
+  box-shadow:0 24px 70px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.04);
+  pointer-events:auto;overflow:hidden}
+.panel-pad{padding:26px 22px}
+
+/* buttons */
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+  background:transparent;border:1px solid var(--line);
+  color:var(--ink);font-size:13px;font-weight:700;letter-spacing:.5px;
+  padding:13px 18px;cursor:pointer;border-radius:3px;
+  font-family:var(--thai);margin-top:9px;transition:all .16s}
+.btn:active{transform:scale(.985)}
+.btn-primary{background:var(--red);border-color:var(--red);color:#fff;
+  box-shadow:0 0 0 0 rgba(255,45,85,.5)}
+.btn-primary:active{background:#E5264C}
+.btn-vital{border-color:var(--vital);color:var(--vital)}
+.btn-ghost{border-color:var(--line);color:var(--muted)}
+.btn.r{border-color:var(--line);color:var(--muted)}
+
 @keyframes sc{from{top:-2px}to{top:100vh}}
 #scanline{position:fixed;left:0;right:0;height:2px;
-  background:linear-gradient(90deg,transparent,rgba(0,212,255,.28),transparent);
+  background:linear-gradient(90deg,transparent,rgba(0,229,160,.25),transparent);
   animation:sc 3.5s linear infinite;pointer-events:none;display:none}
+
+/* flip button */
+#flip-btn{font-family:var(--mono)}
+
+/* mode selector buttons */
+.modebtn{flex:1;background:var(--panel2);border:1px solid var(--line);
+  color:var(--muted);border-radius:3px;padding:11px 3px 9px;cursor:pointer;
+  font-family:var(--thai);display:flex;flex-direction:column;align-items:center;gap:3px;
+  transition:all .16s;font-size:18px}
+.modebtn span{font-size:11px;font-weight:700;color:var(--ink);line-height:1}
+.modebtn i{font-family:var(--mono);font-size:8px;font-style:normal;
+  letter-spacing:.5px;color:var(--muted);opacity:.8}
+.modebtn.sel{border-color:var(--red);background:rgba(255,45,85,.08)}
+.modebtn.sel span{color:var(--red)}
+
+/* ECG hero animation: dash sweeps across */
+#ecg-path{stroke-dasharray:340;stroke-dashoffset:340;
+  animation:ecgsweep 2.4s linear infinite}
+@keyframes ecgsweep{to{stroke-dashoffset:0}}
+@media(prefers-reduced-motion:reduce){
+  #ecg-path{animation:none;stroke-dashoffset:0}
+  #scene-tag::before{animation:none}
+}
 </style>
 </head>
 <body>
@@ -69,9 +128,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;
 <canvas id="cv"></canvas>
 <div id="scanline"></div>
 <button id="flip-btn" style="position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 70px);
-  right:14px;z-index:50;background:rgba(0,0,0,.55);border:1px solid rgba(0,212,255,.4);
-  color:#00D4FF;border-radius:50%;width:46px;height:46px;font-size:20px;cursor:pointer;
-  display:none;pointer-events:auto">🔄</button>
+  right:14px;z-index:50;background:rgba(16,22,30,.8);border:1px solid var(--line);
+  color:var(--ink);border-radius:3px;width:44px;height:44px;font-size:18px;cursor:pointer;
+  display:none;pointer-events:auto;backdrop-filter:blur(6px)">⟳</button>
 <div id="ui">
   <div class="brk" id="bk-tl"></div><div class="brk" id="bk-tr"></div>
   <div class="brk" id="bk-bl"></div><div class="brk" id="bk-br"></div>
@@ -82,70 +141,78 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;
   </div>
   <div id="posture">🤲 ประสานมือสองข้าง!</div>
   <div id="hud-t">
-    <div style="display:flex;gap:7px">
-      <div class="st"><div class="sv" id="n-c" style="color:#FF3366">0</div><div class="sl">ครั้ง</div></div>
-      <div class="st"><div class="sv" id="n-b" style="color:#00D4FF">--</div><div class="sl">BPM</div></div>
+    <div class="hud-grp">
+      <div class="st"><div class="sv" id="n-c" style="color:var(--red)">0</div><div class="sl">Compressions</div></div>
+      <div class="st"><div class="sv" id="n-b" style="color:var(--vital)">--</div><div class="sl">BPM</div></div>
     </div>
-    <div class="st"><div class="sv" id="n-s" style="color:#FFB300">0</div><div class="sl">Score</div></div>
+    <div class="st"><div class="sv" id="n-s" style="color:var(--amber)">0</div><div class="sl">Score</div></div>
   </div>
   <div id="msg"><div id="fb"></div><div id="ins"></div><div id="sub"></div></div>
+
   <div class="panel" id="p-start">
-    <div style="font-size:36px;margin-bottom:10px">🤲</div>
-    <div style="font-size:22px;font-weight:900">
-      Life<span style="color:#00D4FF">Beat</span><span style="color:#FF3366"> AR</span>
+    <!-- ECG hero header -->
+    <div style="position:relative;background:var(--panel2);padding:22px 22px 16px;
+      border-bottom:1px solid var(--line);overflow:hidden">
+      <svg id="ecg-hero" viewBox="0 0 320 56" preserveAspectRatio="none"
+        style="position:absolute;inset:0;width:100%;height:100%;opacity:.5">
+        <path id="ecg-path" d="M0,28 L80,28 L92,28 L100,10 L108,46 L116,28 L150,28 L320,28"
+          fill="none" stroke="var(--red)" stroke-width="1.6"/>
+      </svg>
+      <div style="position:relative">
+        <div style="font-family:var(--mono);font-size:9px;letter-spacing:3px;
+          color:var(--muted);text-transform:uppercase;margin-bottom:6px">Emergency Response Trainer</div>
+        <div style="font-family:var(--disp);font-size:30px;font-weight:900;letter-spacing:-.5px;line-height:1">
+          LIFE<span style="color:var(--red)">BEAT</span>
+          <span style="font-size:14px;font-weight:600;color:var(--muted);letter-spacing:1px">/ AR</span>
+        </div>
+      </div>
     </div>
-    <div style="font-size:10px;letter-spacing:2.5px;opacity:.42;text-transform:uppercase;margin:4px 0 14px">
-      Hands-Free CPR Training
+    <div class="panel-pad">
+      <!-- the one stat that matters -->
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:18px;
+        padding-bottom:16px;border-bottom:1px solid var(--line)">
+        <div style="font-family:var(--disp);font-size:40px;font-weight:900;color:var(--red);line-height:.9">60</div>
+        <div style="text-align:left">
+          <div style="font-family:var(--mono);font-size:9px;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase">วินาที</div>
+          <div style="font-size:13px;font-weight:700;line-height:1.3">ชี้เป็นชี้ตาย<br>ฝึกให้พร้อมก่อนถึงเวลาจริง</div>
+        </div>
+      </div>
+
+      <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--muted);
+        text-transform:uppercase;margin-bottom:9px">เลือกโหมดฝึก</div>
+      <div style="display:flex;gap:6px;margin-bottom:18px">
+        <button id="mode-stand" class="modebtn">📱<span>ถือมือถือ</span><i>ใช้ง่าย</i></button>
+        <button id="mode-kneel" class="modebtn">🧎<span>คุกเข่า</span><i>กดจริง</i></button>
+        <button id="mode-body" class="modebtn">🧍<span>ทั้งตัว</span><i>สมจริงสุด</i></button>
+      </div>
+
+      <button class="btn btn-vital" id="btn-learn">เรียนรู้ก่อนเริ่ม</button>
+      <button class="btn btn-primary" id="btn-ar">เริ่มภารกิจช่วยชีวิต</button>
+      <button class="btn btn-ghost" id="btn-demo">ลองด้วยเมาส์ (Demo)</button>
     </div>
-    <div style="font-size:12px;opacity:.75;line-height:1.85;text-align:left;
-      padding:10px 13px;background:rgba(0,212,255,.05);
-      border:1px solid rgba(0,212,255,.12);border-radius:10px;margin-bottom:12px">
-      ✋ <strong>ไม่ต้องแตะจอเลย</strong><br>
-      📐 ผู้ป่วยถูกตรึงบนพื้นจริง (Ground Projection)<br>
-      🤲 CPR ต้อง<strong>ประสานมือซ้อนกัน</strong>จริง<br>
-      ⚡ AI ตรวจจับท่าทางทุกขั้นตอน
-    </div>
-    <div style="font-size:11px;opacity:.6;margin-bottom:6px;letter-spacing:1px">โหมดฝึก CPR</div>
-    <div style="display:flex;gap:5px;margin-bottom:14px">
-      <button id="mode-stand" class="modebtn" style="flex:1;background:rgba(0,212,255,.12);
-        border:2px solid #00D4FF;color:#00D4FF;border-radius:9px;padding:8px 3px;
-        font-size:10px;font-weight:700;font-family:inherit;cursor:pointer;line-height:1.4">
-        📱 ถือมือถือ<br><span style="font-size:8px;opacity:.7">ใช้ง่าย</span></button>
-      <button id="mode-kneel" class="modebtn" style="flex:1;background:transparent;
-        border:2px solid rgba(255,255,255,.2);color:rgba(255,255,255,.5);border-radius:9px;
-        padding:8px 3px;font-size:10px;font-weight:700;font-family:inherit;cursor:pointer;line-height:1.4">
-        🧎 คุกเข่า<br><span style="font-size:8px;opacity:.7">กดจริง</span></button>
-      <button id="mode-body" class="modebtn" style="flex:1;background:transparent;
-        border:2px solid rgba(255,255,255,.2);color:rgba(255,255,255,.5);border-radius:9px;
-        padding:8px 3px;font-size:10px;font-weight:700;font-family:inherit;cursor:pointer;line-height:1.4">
-        🧍 ทั้งตัว<br><span style="font-size:8px;opacity:.7">สมจริงสุด</span></button>
-    </div>
-    <button class="btn" id="btn-learn" style="border-color:#00FF88;color:#00FF88">📖 เรียนรู้ก่อน (แนะนำ)</button>
-    <button class="btn" id="btn-ar">📷 เริ่มภารกิจเลย</button>
-    <button class="btn r" id="btn-demo">🎮 Demo Mode (เมาส์แทนมือ)</button>
   </div>
 
   <!-- LESSON PANEL -->
-  <div class="panel" id="p-learn" style="display:none;width:min(360px,92vw);padding:0;overflow:hidden">
-    <div style="background:linear-gradient(135deg,#00D4FF22,#00FF8811);padding:16px 20px 12px;
-      border-bottom:1px solid rgba(0,212,255,.18)">
+  <div class="panel" id="p-learn" style="display:none;width:min(360px,92vw)">
+    <div style="background:var(--panel2);padding:16px 20px 13px;
+      border-bottom:1px solid var(--line)">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:10px;letter-spacing:2px;opacity:.6;text-transform:uppercase">บทเรียน</span>
-        <span id="lesson-count" style="font-size:11px;opacity:.6">1/6</span>
+        <span style="font-family:var(--mono);font-size:9px;letter-spacing:3px;color:var(--muted);text-transform:uppercase">บทเรียน · Protocol</span>
+        <span id="lesson-count" style="font-family:var(--mono);font-size:11px;color:var(--vital)">1/6</span>
       </div>
-      <div id="lesson-bar-w" style="height:4px;background:rgba(255,255,255,.12);border-radius:2px;margin-top:8px">
-        <div id="lesson-bar" style="height:100%;width:16%;background:linear-gradient(90deg,#00D4FF,#00FF88);border-radius:2px;transition:width .3s"></div>
+      <div id="lesson-bar-w" style="height:2px;background:var(--line);margin-top:10px">
+        <div id="lesson-bar" style="height:100%;width:16%;background:var(--red);transition:width .3s"></div>
       </div>
     </div>
-    <div style="padding:20px;text-align:center;min-height:280px;display:flex;flex-direction:column">
-      <div id="lesson-emoji" style="font-size:46px;margin-bottom:10px">❤️</div>
-      <div id="lesson-title" style="font-size:18px;font-weight:900;color:#00D4FF;margin-bottom:10px"></div>
-      <div id="lesson-body" style="font-size:13.5px;line-height:1.8;opacity:.9;text-align:left;flex:1"></div>
+    <div style="padding:22px 20px;text-align:center;min-height:286px;display:flex;flex-direction:column">
+      <div id="lesson-emoji" style="font-size:42px;margin-bottom:12px">❤️</div>
+      <div id="lesson-title" style="font-family:var(--disp);font-size:19px;font-weight:900;color:var(--red);margin-bottom:11px"></div>
+      <div id="lesson-body" style="font-size:13.5px;line-height:1.85;color:var(--ink);opacity:.92;text-align:left;flex:1"></div>
       <div id="lesson-quiz" style="display:none;margin-top:12px"></div>
     </div>
     <div style="display:flex;gap:8px;padding:0 16px 16px">
-      <button class="btn" id="lesson-prev" style="flex:1;margin:0;border-color:rgba(255,255,255,.3);color:rgba(255,255,255,.6)">‹ ย้อน</button>
-      <button class="btn" id="lesson-next" style="flex:2;margin:0">ถัดไป ›</button>
+      <button class="btn btn-ghost" id="lesson-prev" style="flex:1;margin:0">ย้อน</button>
+      <button class="btn btn-primary" id="lesson-next" style="flex:2;margin:0">ถัดไป</button>
     </div>
   </div>
 
@@ -267,14 +334,11 @@ function setMode(m){
   cprMode=m;
   kneelMode=(m==='kneel');
   bodyMode=(m==='body');
-  const map={stand:$('mode-stand'),kneel:$('mode-kneel'),body:$('mode-body')};
-  for(const k in map){
-    const el=map[k], on=(k===m);
-    el.style.background=on?'rgba(0,212,255,.12)':'transparent';
-    el.style.borderColor=on?'#00D4FF':'rgba(255,255,255,.2)';
-    el.style.color=on?'#00D4FF':'rgba(255,255,255,.5)';
-  }
+  ['stand','kneel','body'].forEach(k=>{
+    $('mode-'+k).classList.toggle('sel',k===m);
+  });
 }
+setMode('stand');
 
 // ═══════════════════════════════════════════════════════
 // LEARN MODE — บทเรียนภาษาไทย ก่อนลงมือจริง
@@ -319,32 +383,27 @@ function showLesson(){
   const qz=$('lesson-quiz');
   if(L.quiz){
     qz.style.display='block';
-    qz.innerHTML=`<div style="font-size:12.5px;font-weight:700;margin-bottom:8px;color:#FFB300">📝 ${L.quiz.q}</div>`;
+    qz.innerHTML=`<div style="font-family:var(--mono);font-size:11px;font-weight:700;margin-bottom:9px;color:var(--amber);letter-spacing:.5px">❓ ${L.quiz.q}</div>`;
     L.quiz.opts.forEach((o,i)=>{
       const b=document.createElement('button');
-      b.className='btn';b.style.cssText='margin:5px 0;font-size:12px;padding:9px;letter-spacing:0;text-transform:none';
+      b.className='btn btn-ghost';b.style.cssText='margin:5px 0;font-size:12.5px;padding:10px;color:var(--ink)';
       b.textContent=o;
       b.onclick=()=>{
         if(quizAnswered)return;
         if(i===L.quiz.ans){
-          b.style.borderColor='#00FF88';b.style.color='#00FF88';
-          b.textContent='✓ '+o+' — ถูกต้อง!';
+          b.style.borderColor='var(--vital)';b.style.color='var(--vital)';
+          b.textContent='✓ '+o;
           quizAnswered=true;beep(900,80);
-          $('lesson-next').textContent='เริ่มภารกิจจริง 🚀';
-          $('lesson-next').style.borderColor='#00FF88';
-          $('lesson-next').style.color='#00FF88';
         } else {
-          b.style.borderColor='#FF3366';b.style.color='#FF3366';beep(200,150);
+          b.style.borderColor='var(--red)';b.style.color='var(--red)';beep(200,150);
         }
       };
       qz.appendChild(b);
     });
-    $('lesson-next').textContent='เริ่มภารกิจจริง 🚀';
+    $('lesson-next').textContent='เริ่มภารกิจจริง';
   } else {
     qz.style.display='none';
-    $('lesson-next').textContent=lessonIdx===LESSONS.length-1?'เริ่มภารกิจจริง 🚀':'ถัดไป ›';
-    $('lesson-next').style.borderColor='#00D4FF';
-    $('lesson-next').style.color='#00D4FF';
+    $('lesson-next').textContent=lessonIdx===LESSONS.length-1?'เริ่มภารกิจจริง':'ถัดไป';
   }
 }
 
@@ -579,7 +638,7 @@ function updateDwell(zones){
   return null;
 }
 
-function drawHoverBtn(z,color='#00D4FF',icon=''){
+function drawHoverBtn(z,color='#00E5A0',icon=''){
   const p=(Math.sin(Date.now()/450)+1)*.5;
   const active=dwellTarget===z.id;
   G.beginPath();G.arc(z.x,z.y,z.r,0,Math.PI*2);
@@ -608,9 +667,9 @@ function sceneLogic(w,h){
 
   if(phase==='safety0'){
     const z={id:'safe',x:AXX,y:Math.max(80,AYY-B*1.45*PERSP-90),r:46,label:'ปลอดภัย'};
-    drawHoverBtn(z,'#00D4FF','🔍');
+    drawHoverBtn(z,'#00E5A0','🔍');
     if(updateDwell([z])==='safe'){
-      sc+=25;updHUD();setFb('+25','#00D4FF');
+      sc+=25;updHUD();setFb('+25','#00E5A0');
       phase='safety1';waveCount=0;lastWX=null;
       setMsg('🤚 เอามือวางบนไหล่ผู้ป่วย แล้วเขย่า','วางมือในกรอบไหล่ แล้วขยับมือไปมา');
     }
@@ -650,14 +709,14 @@ function sceneLogic(w,h){
     } else { lastWX=null; }
 
     if(waveCount>=WAVE_NEED){
-      sc+=25;updHUD();setFb('ไม่ตอบสนอง!','#FF3366');
+      sc+=25;updHUD();setFb('ไม่ตอบสนอง!','#FF2D55');
       phase='safety2';
       setMsg('🚨 ผู้ป่วยไม่ตอบสนอง ไม่หายใจ!','ค้างมือบนปุ่มโทร 1669');
     }
   }
   else if(phase==='safety2'){
     const z={id:'call',x:AXX,y:Math.max(80,AYY-B*1.45*PERSP-90),r:46,label:'โทร 1669'};
-    drawHoverBtn(z,'#FF3366','📞');
+    drawHoverBtn(z,'#FF2D55','📞');
     if(updateDwell([z])==='call'){sc+=25;updHUD();startCall();}
   }
   else if(phase==='call'){drawCallScene(w,h);}
@@ -667,7 +726,7 @@ function sceneLogic(w,h){
     drawAEDScene(w,h);  // keep showing torso with placed pads
     const T=aedTorso(w,h);
     const z={id:'shock',x:w*.5,y:Math.min(h-120,T.cy+T.th*.62),r:52,label:'SHOCK!'};
-    drawHoverBtn(z,'#FF3366','⚡');
+    drawHoverBtn(z,'#FF2D55','⚡');
     if(updateDwell([z])==='shock'){
       sc+=70;updHUD();beep(200,400);
       if(navigator.vibrate)navigator.vibrate([50,80,50,80,50]);
@@ -694,7 +753,7 @@ function startCall(){
 }
 
 function drawCallScene(w,h){
-  G.font='bold 30px monospace';G.textAlign='center';G.fillStyle='#00D4FF';
+  G.font='bold 30px monospace';G.textAlign='center';G.fillStyle='#00E5A0';
   let d='';for(let i=0;i<4;i++)d+=i<callIdx?callSeq[i]:'_';
   G.fillText(d.split('').join(' '),w*.5,h*.14);
   const need=callSeq[callIdx];
@@ -714,7 +773,7 @@ function drawCallScene(w,h){
         sc+=80;updHUD();setFb('1669 ✓','#00FF88');
         phase='call_done';setTimeout(startCPR,800);
       }
-    } else {setFb('ผิด!','#FF3366');beep(200,160);callIdx=0;}
+    } else {setFb('ผิด!','#FF2D55');beep(200,160);callIdx=0;}
   }
 }
 
@@ -828,7 +887,7 @@ function registerCompression(){
   let txt,col,hz,pts;
   if(!hadPrev){
     // first compression: no rate yet — neutral
-    txt='เริ่ม!';col='#00D4FF';hz=700;pts=4;
+    txt='เริ่ม!';col='#00E5A0';hz=700;pts=4;
     compr++; sc+=pts;
     beep(hz,55); setFb(txt,col); updHUD();
     if(navigator.vibrate)navigator.vibrate(28);
@@ -845,7 +904,7 @@ function registerCompression(){
   const okDepth=demo||lastStrokeQ>=0.5;
 
   if(goodRate&&goodForm&&goodDepth){pts=12;txt='PERFECT!';col='#FFB300';hz=1050;}
-  else if(okRate&&okDepth){pts=7;txt='GOOD';col='#00D4FF';hz=820;}
+  else if(okRate&&okDepth){pts=7;txt='GOOD';col='#00E5A0';hz=820;}
   else if(!okDepth){pts=3;txt='กดให้ลึกขึ้น!';col='#FF6633';hz=300;}
   else if(cbpm<95){pts=3;txt='เร็วขึ้น!';col='#FF9900';hz=360;}
   else{pts=3;txt='ช้าลง!';col='#FF9900';hz=360;}
@@ -929,7 +988,7 @@ function drawAEDScene(w,h){
 
   for(const z of zones){
     const placed=aedPlaced.has(z.id);
-    const col=placed?(aedArmed?'#00FF88':'#FFB300'):'#00D4FF';
+    const col=placed?(aedArmed?'#00FF88':'#FFB300'):'#00E5A0';
     // pad = rounded square (like real AED electrode)
     const active=dwellTarget===z.id;
     const pz=(Math.sin(Date.now()/450)+1)*.5;
@@ -971,7 +1030,7 @@ function drawAEDScene(w,h){
         setMsg('✅ ห้ามสัมผัสผู้ป่วย!','ค้างมือบนปุ่ม SHOCK');
         phase='shock';beep(1050,100);
       } else {
-        setFb('ผิดตำแหน่ง!','#FF3366');beep(200,200);
+        setFb('ผิดตำแหน่ง!','#FF2D55');beep(200,200);
         setTimeout(()=>{aedPlaced=new Set();},800);
       }
     }
@@ -984,18 +1043,28 @@ function drawAEDScene(w,h){
 function showResult(){
   $('msg').style.display='none';$('dots').style.display='none';
   $('scene-tag').className='';postureEl.style.display='none';
-  const e=sc>=480?'🏆':sc>=330?'🥇':sc>=190?'🥈':'🥉';
-  const n=sc>=480?'LifeBeat Hero':sc>=330?'Gold Responder':sc>=190?'Silver Responder':'Bronze Responder';
-  const cl=sc>=480?'#FFD700':sc>=330?'#FFC107':sc>=190?'#C0C0C0':'#CD7F32';
+  const tier=sc>=480?'LIFEBEAT HERO':sc>=330?'GOLD RESPONDER':sc>=190?'SILVER RESPONDER':'BRONZE RESPONDER';
+  const cl=sc>=480?'var(--amber)':sc>=330?'#E8C04A':sc>=190?'#B8C2CC':'#C08A5A';
   $('res').innerHTML=`
-    <div style="font-size:50px;margin-bottom:8px">${e}</div>
-    <div style="font-size:15px;font-weight:800;color:${cl};letter-spacing:1px">${n}</div>
-    <div style="font-size:62px;font-weight:900;line-height:1.1">${sc}</div>
-    <div style="font-size:9px;opacity:.35;letter-spacing:2px;text-transform:uppercase;margin:2px 0 10px">คะแนน</div>
-    <div style="font-size:12px;opacity:.6;line-height:1.8;margin-bottom:16px">
-      🔍 ประเมิน ✓ &nbsp; 📞 1669 ✓<br>❤️ CPR ${compr} ครั้ง (BPM ${cbpm||'--'}) &nbsp; ⚡ AED ✓
+    <div style="background:var(--panel2);padding:18px 22px 14px;border-bottom:1px solid var(--line)">
+      <div style="font-family:var(--mono);font-size:9px;letter-spacing:3px;color:var(--vital);text-transform:uppercase;margin-bottom:4px">▲ ระบบกลับมาเต้นแล้ว</div>
+      <svg viewBox="0 0 300 24" preserveAspectRatio="none" style="width:100%;height:22px">
+        <path d="M0,12 L120,12 L132,12 L140,3 L148,21 L156,12 L300,12" fill="none" stroke="var(--vital)" stroke-width="1.6"/>
+      </svg>
     </div>
-    <button class="btn" onclick="location.reload()">🔄 เล่นอีกครั้ง</button>`;
+    <div class="panel-pad" style="text-align:center">
+      <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;color:${cl};margin-bottom:6px">${tier}</div>
+      <div style="font-family:var(--disp);font-size:64px;font-weight:900;line-height:.95;color:var(--ink)">${sc}</div>
+      <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin:2px 0 18px">คะแนนรวม</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
+        border:1px solid var(--line);margin-bottom:18px;font-family:var(--mono);font-size:11px">
+        <div style="background:var(--panel);padding:9px 6px;color:var(--muted)">ประเมิน<br><b style="color:var(--vital);font-size:13px">✓</b></div>
+        <div style="background:var(--panel);padding:9px 6px;color:var(--muted)">โทร 1669<br><b style="color:var(--vital);font-size:13px">✓</b></div>
+        <div style="background:var(--panel);padding:9px 6px;color:var(--muted)">CPR<br><b style="color:var(--ink);font-size:13px">${compr} ครั้ง · ${cbpm||'--'} BPM</b></div>
+        <div style="background:var(--panel);padding:9px 6px;color:var(--muted)">AED<br><b style="color:var(--vital);font-size:13px">✓</b></div>
+      </div>
+      <button class="btn btn-primary" onclick="location.reload()">ฝึกอีกครั้ง</button>
+    </div>`;
   $('p-res').style.display='block';
 }
 
@@ -1078,7 +1147,7 @@ function drawOffscreenHint(w,h){
   const above=y<0;   // patient projected above screen top → need to look more toward horizon (raise cam)
   const pu=(Math.sin(Date.now()/300)+1)*.5;
   G.font='bold 34px system-ui';G.textAlign='center';
-  G.fillStyle=`rgba(0,212,255,${.5+pu*.4})`;
+  G.fillStyle=`rgba(0,229,160,${.5+pu*.4})`;
   G.fillText(above?'↑':'↓',w*.5,above?70:h-60);
   G.font='bold 14px system-ui';
   G.fillStyle='rgba(255,255,255,.8)';
@@ -1128,7 +1197,7 @@ function drawScan(w,h){
 
 function drawGrid(w,h){
   const vpx=w*.5,vpy=h*.2,fy=h*.9;
-  G.strokeStyle='rgba(0,212,255,.04)';G.lineWidth=1;
+  G.strokeStyle='rgba(0,229,160,.04)';G.lineWidth=1;
   for(let i=0;i<=8;i++){
     const x=w*(i/8);
     G.beginPath();G.moveTo(vpx+(x-vpx)*.25,vpy+(fy-vpy)*.25);G.lineTo(x,fy);G.stroke();
@@ -1150,7 +1219,7 @@ function drawPointer(){
     const W=cv.width,H=cv.height;
     const P=i=>poseLms[i]&&poseLms[i].visibility>.3?{x:poseLms[i].x*W,y:poseLms[i].y*H}:null;
     const bones=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
-    G.strokeStyle=clasped?'rgba(0,255,136,.5)':'rgba(0,212,255,.45)';G.lineWidth=3;
+    G.strokeStyle=clasped?'rgba(0,255,136,.5)':'rgba(0,229,160,.45)';G.lineWidth=3;
     for(const [a,b] of bones){
       const pa=P(a),pb=P(b);
       if(pa&&pb){G.beginPath();G.moveTo(pa.x,pa.y);G.lineTo(pb.x,pb.y);G.stroke();}
@@ -1159,7 +1228,7 @@ function drawPointer(){
     for(const i of [11,12,13,14,15,16,23,24]){
       const p=P(i);if(!p)continue;
       G.beginPath();G.arc(p.x,p.y,5,0,Math.PI*2);
-      G.fillStyle='rgba(0,212,255,.7)';G.fill();
+      G.fillStyle='rgba(0,229,160,.7)';G.fill();
     }
     // highlight clasped hands
     if(h1){
@@ -1180,16 +1249,16 @@ function drawPointer(){
   for(const hd of [h1,h2]){
     if(!hd)continue;
     G.beginPath();G.arc(hd.x,hd.y,15,0,Math.PI*2);
-    G.strokeStyle=clasped?`rgba(0,255,136,${.6+pu*.3})`:`rgba(0,212,255,${.55+pu*.3})`;
+    G.strokeStyle=clasped?`rgba(0,255,136,${.6+pu*.3})`:`rgba(0,229,160,${.55+pu*.3})`;
     G.lineWidth=2;G.stroke();
     G.beginPath();G.arc(hd.x,hd.y,3,0,Math.PI*2);
-    G.fillStyle=clasped?'#00FF88':'#00D4FF';G.fill();
+    G.fillStyle=clasped?'#00FF88':'#00E5A0';G.fill();
   }
   if(!h1&&demo&&demoX!=null){
     G.beginPath();G.arc(demoX,demoY,15,0,Math.PI*2);
-    G.strokeStyle=`rgba(0,212,255,${.55+pu*.3})`;G.lineWidth=2;G.stroke();
+    G.strokeStyle=`rgba(0,229,160,${.55+pu*.3})`;G.lineWidth=2;G.stroke();
     G.beginPath();G.arc(demoX,demoY,3,0,Math.PI*2);
-    G.fillStyle='#00D4FF';G.fill();
+    G.fillStyle='#00E5A0';G.fill();
   }
 }
 
@@ -1212,7 +1281,7 @@ function drawPatient(w,h){
     for(let i=0;i<8;i++){
       const a=(i/8)*Math.PI*2,r=B*burst*.9;
       G.beginPath();G.arc(Math.cos(a)*r,Math.sin(a)*r*persp,3,0,Math.PI*2);
-      G.fillStyle=`rgba(0,212,255,${burst*.8})`;G.fill();
+      G.fillStyle=`rgba(0,229,160,${burst*.8})`;G.fill();
     }
   }
   G.scale(matScale,matScale);
@@ -1333,7 +1402,7 @@ function drawPatient(w,h){
   // Danger pulse around head (safety scenes)
   if(['safety0','safety1','safety2','mat'].includes(phase)){
     const pu=(Math.sin(Date.now()/400)+1)*.5;
-    G.globalAlpha=.55*pu;G.strokeStyle='#FF3366';G.lineWidth=2.2;
+    G.globalAlpha=.55*pu;G.strokeStyle='#FF2D55';G.lineWidth=2.2;
     G.beginPath();G.ellipse(0,-B*1.38,B*.4+B*.08*pu,B*.46+B*.1*pu,0,0,Math.PI*2);G.stroke();
     G.globalAlpha=1;
   }

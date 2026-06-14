@@ -68,6 +68,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;
 <video id="vid" autoplay playsinline muted></video>
 <canvas id="cv"></canvas>
 <div id="scanline"></div>
+<button id="flip-btn" style="position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 70px);
+  right:14px;z-index:50;background:rgba(0,0,0,.55);border:1px solid rgba(0,212,255,.4);
+  color:#00D4FF;border-radius:50%;width:46px;height:46px;font-size:20px;cursor:pointer;
+  display:none;pointer-events:auto">🔄</button>
 <div id="ui">
   <div class="brk" id="bk-tl"></div><div class="brk" id="bk-tr"></div>
   <div class="brk" id="bk-bl"></div><div class="brk" id="bk-br"></div>
@@ -98,7 +102,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;
       border:1px solid rgba(0,212,255,.12);border-radius:10px;margin-bottom:16px">
       ✋ <strong>ไม่ต้องแตะจอเลย</strong><br>
       📐 ผู้ป่วยถูกตรึงบนพื้นจริง (Ground Projection)<br>
-      🤲 CPR ต้อง<strong>ประสานมือ 2 ข้าง</strong>จริง<br>
+      🤲 CPR ต้อง<strong>ประสานมือซ้อนกัน</strong>จริง<br>
       ⚡ AI ตรวจจับท่าทางทุกขั้นตอน
     </div>
     <button class="btn" id="btn-ar">📷 เริ่ม — เปิดกล้อง AR</button>
@@ -138,6 +142,7 @@ let scanAccum=0,lastScanT=0,sensorOK=false;
 let distF=1;               // distance scale factor (recomputed per frame)
 
 let lms=[],h1=null,h2=null,demoX=null,demoY=null,clasped=false;
+let isFront=false;         // true if using front (selfie) camera → mirror
 let dwellTarget=null,dwellStart=0,dwellProg=0;
 let waveDir=0,waveCount=0,lastWX=null;
 let compr=0,cbpm=0,bwin=[];
@@ -223,16 +228,39 @@ function attachOrient(){
   },{passive:true});
 }
 
+let curFacing='environment', camStream=null, mpStarted=false;
+
 async function startAR(){
   $('p-start').style.display='none';
-  try{
-    const s=await navigator.mediaDevices.getUserMedia({
-      video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}});
-    vid.srcObject=s;
-    await new Promise(r=>vid.onloadedmetadata=r);
-    vid.play();initMP();
-  }catch(e){demo=true;}
+  await openCamera('environment');
+  $('flip-btn').style.display='block';
   beginScan();
+}
+
+async function openCamera(facing){
+  try{
+    if(camStream){ camStream.getTracks().forEach(t=>t.stop()); }
+    const s=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:facing},width:{ideal:1280},height:{ideal:720}}});
+    camStream=s; curFacing=facing;
+    vid.srcObject=s;
+    const settings=(s.getVideoTracks()[0]||{}).getSettings?.()||{};
+    isFront = settings.facingMode==='user' || facing==='user';
+    applyMirror();
+    await new Promise(r=>vid.onloadedmetadata=r);
+    vid.play();
+    if(!mpStarted){ initMP(); mpStarted=true; }
+  }catch(e){ demo=true; }
+}
+
+$('flip-btn').onclick=()=>{
+  openCamera(curFacing==='environment'?'user':'environment');
+};
+
+function applyMirror(){
+  // mirror only the video feed (เหมือนส่องกระจก); canvas stays unmirrored
+  // so text/UI is readable. Hand X coords get flipped in JS instead.
+  vid.style.transform = isFront ? 'scaleX(-1)' : 'none';
 }
 
 function initMP(){
@@ -243,14 +271,25 @@ function initMP(){
       minDetectionConfidence:.5,minTrackingConfidence:.5});
     h.onResults(r=>{
       lms=r.multiHandLandmarks||[];
+      // when front camera is mirrored on screen, flip landmark X so
+      // on-canvas markers match what the user sees in the mirror
+      if(isFront){
+        for(const lm of lms) for(const pt of lm) pt.x=1-pt.x;
+      }
       h1=null;h2=null;
       if(lms[0]){const lm=lms[0];
         h1={x:(lm[0].x+lm[9].x)/2*cv.width,y:(lm[0].y+lm[9].y)/2*cv.height};}
       if(lms[1]){const lm=lms[1];
         h2={x:(lm[0].x+lm[9].x)/2*cv.width,y:(lm[0].y+lm[9].y)/2*cv.height};}
+      // CPR clasp logic:
+      //  - 2 hands detected close together = ประสานมือ ✓
+      //  - OR only 1 "hand" detected (because stacked hands read as one) = also OK
+      //    (real CPR stacks hands so MediaPipe often sees a single blob)
       if(h1&&h2){
         const d=Math.hypot(h1.x-h2.x,h1.y-h2.y);
         clasped=d<Math.min(cv.width,cv.height)*CLASP_DIST_F;
+      } else if(h1&&!h2){
+        clasped=true;   // single detected hand during CPR = stacked hands
       } else clasped=false;
     });
     if(window._mcf||typeof Camera==='undefined')return;
@@ -468,8 +507,8 @@ function startCPR(){
   pumpState='up';pumpRefY=null;lastPumpT=0;
   setTag('SCENE 3 — CPR');setDots(2);
   postureEl.style.display='block';
-  setMsg('🤲 ประสานมือ 2 ข้าง วางบนหน้าอก แล้วปั๊มขึ้น-ลง',
-    'ประสานมือถูกต้องถึงได้ PERFECT');
+  setMsg('🤲 ประสานมือซ้อนกัน วางบนหน้าอก แล้วปั๊มขึ้น-ลง',
+    'วางมือซ้อนประสานกันตรงกลางอก ตามจังหวะ 110 ครั้ง/นาที');
 }
 
 function cprMotion(w,h){
@@ -480,10 +519,9 @@ function cprMotion(w,h){
   inChest=false;
 
   if(demo){postureEl.className='good';postureEl.textContent='🎮 Demo — แตะจอ = ปั๊ม';}
-  else if(clasped){postureEl.className='good';postureEl.textContent='🤲 ประสานมือ ✓';}
-  else if(h1&&h2){postureEl.className='';postureEl.textContent='🤲 เอามือชิดกัน!';}
-  else if(h1){postureEl.className='';postureEl.textContent='✋ ใช้มือ 2 ข้างประสาน!';}
-  else {postureEl.className='';postureEl.textContent='👀 ยกมือเข้ากล้อง';}
+  else if(clasped){postureEl.className='good';postureEl.textContent='🤲 ท่าถูกต้อง ✓ ปั๊มเลย!';}
+  else if(h1&&h2){postureEl.className='';postureEl.textContent='🤲 เอามือมาประสานซ้อนกัน!';}
+  else {postureEl.className='';postureEl.textContent='👀 ยกมือที่ประสานเข้ากล้อง';}
 
   if(p){
     const dx=p.x-cx,dy=(p.y-cy)/PERSP;
@@ -851,7 +889,7 @@ function drawChestTarget(B,dp){
   G.font=`bold ${Math.max(11,Math.round(Rx*.2))}px system-ui`;
   G.fillStyle=`rgba(${r},${g},${b},${.85+p*.1})`;
   G.textAlign='center';G.textBaseline='top';
-  const label=!inChest?'เอามือมาวางที่นี่':!clasped&&!demo?'ประสานมือ 2 ข้าง!':'ปั๊มขึ้น-ลง!';
+  const label=!inChest?'เอามือมาวางที่นี่':!clasped&&!demo?'ประสานมือซ้อนกัน!':'ปั๊มขึ้น-ลง!';
   G.fillText(label,cx,cy+Ry*1.25);
   G.textBaseline='alphabetic';
   if(cA>.04){

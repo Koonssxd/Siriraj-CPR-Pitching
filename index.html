@@ -640,23 +640,39 @@ function drawAEDScene(w,h){
 
   // ── draw close-up bare torso (front view, like AED trainer) ──
   G.save();
-  // shadow
-  G.globalAlpha=.3;G.fillStyle='#000';
-  G.beginPath();G.ellipse(T.cx,T.cy+T.th*.5,T.tw*.6,T.th*.12,0,0,Math.PI*2);G.fill();
+  // soft shadow
+  const sh=G.createRadialGradient(T.cx,T.cy+T.th*.5,0,T.cx,T.cy+T.th*.5,T.tw*.7);
+  sh.addColorStop(0,'rgba(0,0,0,.32)');sh.addColorStop(1,'rgba(0,0,0,0)');
+  G.fillStyle=sh;
+  G.beginPath();G.ellipse(T.cx,T.cy+T.th*.5,T.tw*.65,T.th*.14,0,0,Math.PI*2);G.fill();
+  // neck
+  const ng=G.createLinearGradient(T.cx,T.cy-T.th*.6,T.cx,T.cy-T.th*.4);
+  ng.addColorStop(0,'#E0A87E');ng.addColorStop(1,'#F6C9A0');
+  G.fillStyle=ng;G.fill(mkRR(T.cx-T.tw*.14,T.cy-T.th*.6,T.tw*.28,T.th*.16,T.tw*.06));
+  // torso with skin gradient (rounded, shoulders wider at top)
+  const tg=G.createLinearGradient(T.cx-T.tw*.42,0,T.cx+T.tw*.42,0);
+  tg.addColorStop(0,'#E0A87E');tg.addColorStop(.5,'#F6C9A0');tg.addColorStop(1,'#E0A87E');
+  G.fillStyle=tg;G.fill(mkRR(T.cx-T.tw*.42,T.cy-T.th*.44,T.tw*.84,T.th*.86,T.tw*.2));
+  // top highlight
+  G.globalAlpha=.25;
+  const hg=G.createLinearGradient(T.cx,T.cy-T.th*.44,T.cx,T.cy-T.th*.1);
+  hg.addColorStop(0,'#FFE0C0');hg.addColorStop(1,'rgba(255,224,192,0)');
+  G.fillStyle=hg;G.fill(mkRR(T.cx-T.tw*.4,T.cy-T.th*.42,T.tw*.8,T.th*.4,T.tw*.18));
   G.globalAlpha=1;
-  // neck + head hint (top)
-  G.fillStyle='#FFCFA0';
-  fEl(T.cx,T.cy-T.th*.52,T.tw*.16,T.tw*.18,'#FFCFA0');
-  // torso (skin, bare chest for pads)
-  fRR(T.cx-T.tw*.42,T.cy-T.th*.42,T.tw*.84,T.th*.84,T.tw*.18,'#F2C49C');
-  // pectoral / rib shading
-  G.globalAlpha=.10;G.fillStyle='#000';
-  G.beginPath();G.ellipse(T.cx-T.tw*.18,T.cy-T.th*.2,T.tw*.16,T.tw*.13,0,0,Math.PI*2);G.fill();
-  G.beginPath();G.ellipse(T.cx+T.tw*.18,T.cy-T.th*.2,T.tw*.16,T.tw*.13,0,0,Math.PI*2);G.fill();
+  // pectorals
+  G.globalAlpha=.12;G.fillStyle='#000';
+  G.beginPath();G.ellipse(T.cx-T.tw*.19,T.cy-T.th*.16,T.tw*.17,T.tw*.14,0,0,Math.PI*2);G.fill();
+  G.beginPath();G.ellipse(T.cx+T.tw*.19,T.cy-T.th*.16,T.tw*.17,T.tw*.14,0,0,Math.PI*2);G.fill();
+  // abs hint
+  G.globalAlpha=.08;
+  for(let i=0;i<2;i++){
+    fEl(T.cx-T.tw*.1,T.cy+T.th*.04+i*T.tw*.16,T.tw*.07,T.tw*.06,'#000');
+    fEl(T.cx+T.tw*.1,T.cy+T.th*.04+i*T.tw*.16,T.tw*.07,T.tw*.06,'#000');
+  }
   G.globalAlpha=1;
-  // center sternum line
-  G.strokeStyle='rgba(0,0,0,.08)';G.lineWidth=2;
-  G.beginPath();G.moveTo(T.cx,T.cy-T.th*.32);G.lineTo(T.cx,T.cy+T.th*.2);G.stroke();
+  // sternum line
+  G.strokeStyle='rgba(120,80,55,.18)';G.lineWidth=2;
+  G.beginPath();G.moveTo(T.cx,T.cy-T.th*.3);G.lineTo(T.cx,T.cy+T.th*.22);G.stroke();
   G.restore();
 
   // ── pad zones ──
@@ -904,74 +920,124 @@ function drawPatient(w,h){
   G.scale(matScale,matScale);
   G.scale(1,PERSP);
 
-  G.globalAlpha=.24;G.fillStyle='#000';
-  G.beginPath();G.ellipse(0,B*.05,B*.62,B*1.7,0,0,Math.PI*2);G.fill();
-  G.globalAlpha=.92;
+  // soft ground shadow (radial, feathered)
+  const sh=G.createRadialGradient(0,B*.05,0,0,B*.05,B*1.5);
+  sh.addColorStop(0,'rgba(0,0,0,.34)');
+  sh.addColorStop(.7,'rgba(0,0,0,.18)');
+  sh.addColorStop(1,'rgba(0,0,0,0)');
+  G.fillStyle=sh;
+  G.beginPath();G.ellipse(0,B*.1,B*.7,B*1.78,0,0,Math.PI*2);G.fill();
+  G.globalAlpha=1;
 
   // ───────────────────────────────────────────────
-  // PATIENT LYING FLAT ON BACK (supine)
-  // Vertical layout: head far (top, -Y), feet near (bottom, +Y)
-  // CPR chest target sits at body center
+  // PATIENT — supine, polished illustration
+  // head far (-Y), feet near (+Y); chest at body-Y ≈ -0.40
   // ───────────────────────────────────────────────
-  const SKIN='#FFCFA0', SKIN2='#F0BC8C', SHIRT='#2A55A0', SHIRT2='#244A92', PANTS='#1D2F50';
+  const SKIN='#F6C9A0', SKINSH='#E0A87E', SKINHI='#FFE0C0';
+  const HAIR='#3A2616', HAIRHI='#5A3D24';
+  const SHIRT='#3D6FB8', SHIRTSH='#2B4F88', SHIRTHI='#5A8AD4';
+  const PANTS='#34425E', PANTSSH='#222C42';
 
-  // HEAD (far end, top)
-  fEl(0,-B*1.32,B*.23,B*.27,SKIN);
-  G.beginPath();G.ellipse(0,-B*1.45,B*.23,B*.17,0,Math.PI,0);
-  G.fillStyle='#2A180B';G.fill();
-  G.strokeStyle='rgba(120,80,60,.55)';G.lineWidth=1.4;
-  G.beginPath();G.arc(-B*.08,-B*1.30,B*.04,0,Math.PI);G.stroke();
-  G.beginPath();G.arc( B*.08,-B*1.30,B*.04,0,Math.PI);G.stroke();
-  G.beginPath();G.moveTo(0,-B*1.26);G.lineTo(0,-B*1.22);G.stroke();
+  // helper: vertical gradient rounded-rect (along body axis)
+  const gradRR=(x,y,ww,hh,r,cTop,cBot)=>{
+    const g=G.createLinearGradient(x,y,x+ww,y);
+    g.addColorStop(0,cTop);g.addColorStop(1,cBot);
+    G.fillStyle=g;G.fill(mkRR(x,y,ww,hh,r));
+  };
 
-  // NECK
-  fRR(-B*.10,-B*1.18,B*.20,B*.14,B*.05,SKIN2);
+  // ---- LEGS (toward camera) ----
+  gradRR(-B*.345,B*.40,B*.32,B*.92,B*.15,PANTSSH,PANTS);
+  gradRR( B*.025,B*.40,B*.32,B*.92,B*.15,PANTS,PANTSSH);
+  // knee highlights
+  G.globalAlpha=.12;fEl(-B*.18,B*.66,B*.14,B*.16,'#fff');
+  fEl( B*.18,B*.66,B*.14,B*.16,'#fff');G.globalAlpha=1;
+  // ankles (skin)
+  fEl(-B*.18,B*1.22,B*.10,B*.13,SKINSH);
+  fEl( B*.18,B*1.22,B*.10,B*.13,SKINSH);
+  // SHOES
+  const shoeG=G.createLinearGradient(0,B*1.28,0,B*1.55);
+  shoeG.addColorStop(0,'#2A3242');shoeG.addColorStop(1,'#11151E');
+  G.fillStyle=shoeG;G.fill(mkRR(-B*.27,B*1.30,B*.20,B*.26,B*.09));
+  G.fillStyle=shoeG;G.fill(mkRR( B*.07,B*1.30,B*.20,B*.26,B*.09));
+  G.globalAlpha=.22;fEl(-B*.17,B*1.36,B*.07,B*.05,'#fff');
+  fEl( B*.17,B*1.36,B*.07,B*.05,'#fff');G.globalAlpha=1;
 
-  // SHOULDERS
-  fRR(-B*.42,-B*1.10,B*.84,B*.30,B*.14,SHIRT);
+  // ---- HIPS ----
+  gradRR(-B*.37,B*.06,B*.74,B*.40,B*.13,PANTSSH,PANTS);
 
-  // ARMS resting at sides
-  fRR(-B*.58,-B*1.02,B*.20,B*.66,B*.09,SHIRT2);
-  fRR( B*.38,-B*1.02,B*.20,B*.66,B*.09,SHIRT2);
-  fRR(-B*.60,-B*.40,B*.17,B*.52,B*.08,SKIN2);
-  fRR( B*.43,-B*.40,B*.17,B*.52,B*.08,SKIN2);
-  fEl(-B*.51,B*.16,B*.10,B*.12,SKIN);
-  fEl( B*.51,B*.16,B*.10,B*.12,SKIN);
+  // ---- TORSO / SHIRT ----
+  const tg=G.createLinearGradient(-B*.4,0,B*.4,0);
+  tg.addColorStop(0,SHIRTSH);tg.addColorStop(.5,SHIRT);tg.addColorStop(1,SHIRTSH);
+  G.fillStyle=tg;G.fill(mkRR(-B*.4,-B*.86+dp,B*.80,B*1.0,B*.16));
+  // chest highlight ridge
+  G.globalAlpha=.14;
+  G.fillStyle=SHIRTHI;G.fill(mkRR(-B*.12,-B*.82+dp,B*.24,B*.9,B*.08));
+  G.globalAlpha=1;
+  // collar
+  G.fillStyle=SHIRTSH;
+  G.beginPath();G.moveTo(-B*.16,-B*.86+dp);G.lineTo(0,-B*.72+dp);
+  G.lineTo(B*.16,-B*.86+dp);G.closePath();G.fill();
+  // subtle fabric fold lines
+  G.globalAlpha=.08;G.strokeStyle='#000';G.lineWidth=B*.02;
+  G.beginPath();G.moveTo(-B*.22,-B*.5+dp);G.lineTo(-B*.1,-B*.2+dp);
+  G.moveTo(B*.22,-B*.5+dp);G.lineTo(B*.1,-B*.2+dp);G.stroke();
+  G.globalAlpha=1;
 
-  // TORSO / CHEST (CPR zone, center)
-  fRR(-B*.38,-B*.84+dp,B*.76,B*.96,B*.12,SHIRT);
-  sRR(-B*.38,-B*.84+dp,B*.76,B*.96,B*.12,'rgba(120,180,255,.3)',1.5);
-  G.globalAlpha=.10;
-  fRR(-B*.04,-B*.80+dp,B*.08,B*.86,B*.03,'#fff');
-  G.globalAlpha=.92;
-  G.globalAlpha=.07;
-  for(let i=0;i<3;i++) fRR(-B*.30,-B*.55+dp+i*B*.14,B*.60,B*.05,B*.02,'#000');
-  G.globalAlpha=.92;
+  // ---- SHOULDERS ----
+  gradRR(-B*.46,-B*1.12,B*.92,B*.34,B*.16,SHIRTSH,SHIRT);
 
-  // HIPS
-  fRR(-B*.36,B*.12,B*.72,B*.34,B*.10,PANTS);
+  // ---- ARMS at sides ----
+  // upper arm (sleeve)
+  gradRR(-B*.62,-B*1.06,B*.22,B*.5,B*.10,SHIRTSH,SHIRT);
+  gradRR( B*.40,-B*1.06,B*.22,B*.5,B*.10,SHIRT,SHIRTSH);
+  // forearm (skin)
+  gradRR(-B*.63,-B*.58,B*.18,B*.62,B*.09,SKINSH,SKIN);
+  gradRR( B*.45,-B*.58,B*.18,B*.62,B*.09,SKIN,SKINSH);
+  // hands
+  fEl(-B*.54,B*.10,B*.11,B*.14,SKIN);
+  fEl( B*.54,B*.10,B*.11,B*.14,SKIN);
+  G.globalAlpha=.5;fEl(-B*.54,B*.07,B*.08,B*.06,SKINHI);
+  fEl( B*.54,B*.07,B*.08,B*.06,SKINHI);G.globalAlpha=1;
 
-  // LEGS toward camera
-  fRR(-B*.34,B*.42,B*.30,B*.86,B*.12,PANTS);
-  fRR( B*.04,B*.42,B*.30,B*.86,B*.12,'#19294A');
-  G.globalAlpha=.10;
-  fEl(-B*.19,B*.70,B*.13,B*.10,'#fff');
-  fEl( B*.19,B*.70,B*.13,B*.10,'#fff');
-  G.globalAlpha=.92;
-  // SHOES nearest
-  fEl(-B*.19,B*1.32,B*.16,B*.20,'#0D1220');
-  fEl( B*.19,B*1.32,B*.16,B*.20,'#0D1220');
-  G.globalAlpha=.18;
-  fEl(-B*.19,B*1.26,B*.10,B*.08,'#fff');
-  fEl( B*.19,B*1.26,B*.10,B*.08,'#fff');
-  G.globalAlpha=.92;
+  // ---- NECK ----
+  gradRR(-B*.11,-B*1.22,B*.22,B*.16,B*.06,SKINSH,SKIN);
+
+  // ---- HEAD (far end) ----
+  // face
+  const fg=G.createRadialGradient(-B*.06,-B*1.4,B*.04,0,-B*1.36,B*.34);
+  fg.addColorStop(0,SKINHI);fg.addColorStop(.6,SKIN);fg.addColorStop(1,SKINSH);
+  G.fillStyle=fg;
+  G.beginPath();G.ellipse(0,-B*1.38,B*.25,B*.30,0,0,Math.PI*2);G.fill();
+  // ears
+  fEl(-B*.24,-B*1.38,B*.06,B*.09,SKINSH);
+  fEl( B*.24,-B*1.38,B*.06,B*.09,SKINSH);
+  // hair (top crown)
+  const hg=G.createLinearGradient(0,-B*1.7,0,-B*1.4);
+  hg.addColorStop(0,HAIR);hg.addColorStop(1,HAIRHI);
+  G.fillStyle=hg;
+  G.beginPath();G.ellipse(0,-B*1.54,B*.27,B*.22,0,Math.PI,0);G.fill();
+  G.beginPath();G.ellipse(0,-B*1.46,B*.26,B*.16,0,Math.PI*1.05,Math.PI*1.95);G.fill();
+  // closed eyes (unconscious)
+  G.strokeStyle='rgba(90,60,45,.7)';G.lineWidth=Math.max(1.4,B*.018);
+  G.beginPath();G.arc(-B*.09,-B*1.37,B*.05,0.15,Math.PI-0.15);G.stroke();
+  G.beginPath();G.arc( B*.09,-B*1.37,B*.05,0.15,Math.PI-0.15);G.stroke();
+  // brows
+  G.strokeStyle='rgba(70,45,30,.5)';G.lineWidth=Math.max(1.2,B*.014);
+  G.beginPath();G.arc(-B*.09,-B*1.42,B*.05,Math.PI+0.3,Math.PI*2-0.3);G.stroke();
+  G.beginPath();G.arc( B*.09,-B*1.42,B*.05,Math.PI+0.3,Math.PI*2-0.3);G.stroke();
+  // nose
+  G.strokeStyle='rgba(180,130,100,.5)';G.lineWidth=Math.max(1.2,B*.015);
+  G.beginPath();G.moveTo(0,-B*1.34);G.lineTo(-B*.02,-B*1.28);G.stroke();
+  // mouth (slightly open - unconscious)
+  G.fillStyle='rgba(120,70,60,.4)';
+  G.beginPath();G.ellipse(0,-B*1.24,B*.05,B*.025,0,0,Math.PI*2);G.fill();
 
   // Danger pulse around head (safety scenes)
   if(['safety0','safety1','safety2','mat'].includes(phase)){
     const pu=(Math.sin(Date.now()/400)+1)*.5;
-    G.globalAlpha=.6*pu;G.strokeStyle='#FF3366';G.lineWidth=2;
-    G.beginPath();G.ellipse(0,-B*1.32,B*.35+B*.08*pu,B*.40+B*.10*pu,0,0,Math.PI*2);G.stroke();
-    G.globalAlpha=.92;
+    G.globalAlpha=.55*pu;G.strokeStyle='#FF3366';G.lineWidth=2.2;
+    G.beginPath();G.ellipse(0,-B*1.38,B*.4+B*.08*pu,B*.46+B*.1*pu,0,0,Math.PI*2);G.stroke();
+    G.globalAlpha=1;
   }
   G.restore();
 

@@ -99,20 +99,63 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;
     </div>
     <div style="font-size:12px;opacity:.75;line-height:1.85;text-align:left;
       padding:10px 13px;background:rgba(0,212,255,.05);
-      border:1px solid rgba(0,212,255,.12);border-radius:10px;margin-bottom:16px">
+      border:1px solid rgba(0,212,255,.12);border-radius:10px;margin-bottom:12px">
       ✋ <strong>ไม่ต้องแตะจอเลย</strong><br>
       📐 ผู้ป่วยถูกตรึงบนพื้นจริง (Ground Projection)<br>
       🤲 CPR ต้อง<strong>ประสานมือซ้อนกัน</strong>จริง<br>
       ⚡ AI ตรวจจับท่าทางทุกขั้นตอน
     </div>
-    <button class="btn" id="btn-ar">📷 เริ่ม — เปิดกล้อง AR</button>
+    <div style="font-size:11px;opacity:.6;margin-bottom:6px;letter-spacing:1px">โหมดฝึก CPR</div>
+    <div style="display:flex;gap:5px;margin-bottom:14px">
+      <button id="mode-stand" class="modebtn" style="flex:1;background:rgba(0,212,255,.12);
+        border:2px solid #00D4FF;color:#00D4FF;border-radius:9px;padding:8px 3px;
+        font-size:10px;font-weight:700;font-family:inherit;cursor:pointer;line-height:1.4">
+        📱 ถือมือถือ<br><span style="font-size:8px;opacity:.7">ใช้ง่าย</span></button>
+      <button id="mode-kneel" class="modebtn" style="flex:1;background:transparent;
+        border:2px solid rgba(255,255,255,.2);color:rgba(255,255,255,.5);border-radius:9px;
+        padding:8px 3px;font-size:10px;font-weight:700;font-family:inherit;cursor:pointer;line-height:1.4">
+        🧎 คุกเข่า<br><span style="font-size:8px;opacity:.7">กดจริง</span></button>
+      <button id="mode-body" class="modebtn" style="flex:1;background:transparent;
+        border:2px solid rgba(255,255,255,.2);color:rgba(255,255,255,.5);border-radius:9px;
+        padding:8px 3px;font-size:10px;font-weight:700;font-family:inherit;cursor:pointer;line-height:1.4">
+        🧍 ทั้งตัว<br><span style="font-size:8px;opacity:.7">สมจริงสุด</span></button>
+    </div>
+    <button class="btn" id="btn-learn" style="border-color:#00FF88;color:#00FF88">📖 เรียนรู้ก่อน (แนะนำ)</button>
+    <button class="btn" id="btn-ar">📷 เริ่มภารกิจเลย</button>
     <button class="btn r" id="btn-demo">🎮 Demo Mode (เมาส์แทนมือ)</button>
   </div>
+
+  <!-- LESSON PANEL -->
+  <div class="panel" id="p-learn" style="display:none;width:min(360px,92vw);padding:0;overflow:hidden">
+    <div style="background:linear-gradient(135deg,#00D4FF22,#00FF8811);padding:16px 20px 12px;
+      border-bottom:1px solid rgba(0,212,255,.18)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:10px;letter-spacing:2px;opacity:.6;text-transform:uppercase">บทเรียน</span>
+        <span id="lesson-count" style="font-size:11px;opacity:.6">1/6</span>
+      </div>
+      <div id="lesson-bar-w" style="height:4px;background:rgba(255,255,255,.12);border-radius:2px;margin-top:8px">
+        <div id="lesson-bar" style="height:100%;width:16%;background:linear-gradient(90deg,#00D4FF,#00FF88);border-radius:2px;transition:width .3s"></div>
+      </div>
+    </div>
+    <div style="padding:20px;text-align:center;min-height:280px;display:flex;flex-direction:column">
+      <div id="lesson-emoji" style="font-size:46px;margin-bottom:10px">❤️</div>
+      <div id="lesson-title" style="font-size:18px;font-weight:900;color:#00D4FF;margin-bottom:10px"></div>
+      <div id="lesson-body" style="font-size:13.5px;line-height:1.8;opacity:.9;text-align:left;flex:1"></div>
+      <div id="lesson-quiz" style="display:none;margin-top:12px"></div>
+    </div>
+    <div style="display:flex;gap:8px;padding:0 16px 16px">
+      <button class="btn" id="lesson-prev" style="flex:1;margin:0;border-color:rgba(255,255,255,.3);color:rgba(255,255,255,.6)">‹ ย้อน</button>
+      <button class="btn" id="lesson-next" style="flex:2;margin:0">ถัดไป ›</button>
+    </div>
+  </div>
+
   <div class="panel" id="p-res" style="display:none"><div id="res"></div></div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"
   crossorigin="anonymous" onerror="window._mf=1"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"
+  crossorigin="anonymous" onerror="window._mpf=1"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"
   crossorigin="anonymous" onerror="window._mcf=1"></script>
 
@@ -147,6 +190,11 @@ let dwellTarget=null,dwellStart=0,dwellProg=0;
 let waveDir=0,waveCount=0,lastWX=null;
 let compr=0,cbpm=0,bwin=[];
 let pumpState='up',pumpRefY=null,pumpExtreme=null,lastPumpT=0,cprDepth=0;
+let kneelMode=false;       // true = phone laid flat, kneeling beside patient
+let bodyMode=false;        // true = full-body pose mode (MediaPipe Pose)
+let cprMode='stand';       // 'stand' | 'kneel' | 'body'
+let strokeDepth=0;         // 0..1 how deep the current stroke went (for depth meter)
+let lastStrokeQ=0;         // quality of last completed stroke depth (0..1)
 let cA=0,inChest=false;
 let aedPlaced=new Set(),aedArmed=false;
 let callSeq=['1','6','6','9'],callIdx=0,callZones=null;
@@ -209,6 +257,102 @@ function patientOnScreen(){
 // ═══════════════════════════════════════════════════════
 $('btn-ar').onclick=()=>{requestSensors();startAR();};
 $('btn-demo').onclick=()=>{demo=true;beginScan();};
+$('btn-learn').onclick=()=>openLesson();
+
+// CPR mode toggle
+$('mode-stand').onclick=()=>setMode('stand');
+$('mode-kneel').onclick=()=>setMode('kneel');
+$('mode-body').onclick=()=>setMode('body');
+function setMode(m){
+  cprMode=m;
+  kneelMode=(m==='kneel');
+  bodyMode=(m==='body');
+  const map={stand:$('mode-stand'),kneel:$('mode-kneel'),body:$('mode-body')};
+  for(const k in map){
+    const el=map[k], on=(k===m);
+    el.style.background=on?'rgba(0,212,255,.12)':'transparent';
+    el.style.borderColor=on?'#00D4FF':'rgba(255,255,255,.2)';
+    el.style.color=on?'#00D4FF':'rgba(255,255,255,.5)';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// LEARN MODE — บทเรียนภาษาไทย ก่อนลงมือจริง
+// ═══════════════════════════════════════════════════════
+const LESSONS=[
+  {emoji:'❤️', title:'CPR คืออะไร?',
+   body:'CPR (การปั๊มหัวใจผายปอดกู้ชีพ) คือการช่วยชีวิตเมื่อมีคน<b>หัวใจหยุดเต้น</b> หรือ<b>หมดสติไม่หายใจ</b><br><br>เมื่อหัวใจหยุด เลือดจะไม่ไปเลี้ยงสมอง ทุกๆ 1 นาทีที่ผ่านไปโดยไม่ได้ช่วย โอกาสรอดลดลง <b>7-10%</b><br><br>การปั๊มหัวใจคือการ "บีบหัวใจแทน" เพื่อส่งเลือดไปเลี้ยงสมองจนกว่าทีมแพทย์จะมาถึง'},
+  {emoji:'🔍', title:'ขั้นที่ 1 — ประเมินความปลอดภัย',
+   body:'ก่อนเข้าไปช่วย ต้อง<b>ดูรอบๆ ว่าปลอดภัยไหม</b><br><br>• มีสายไฟ ไฟไหม้ รถ หรืออันตรายอื่นหรือไม่?<br>• ถ้าไม่ปลอดภัย อย่าเพิ่งเข้าไป<br><br>จากนั้น<b>เขย่าไหล่</b>ผู้ป่วยเบาๆ พร้อมเรียกดังๆ ว่า<br>"คุณ! คุณ! ได้ยินไหม?"<br><br>ถ้าไม่ตอบสนอง = ต้องช่วยทันที'},
+  {emoji:'📞', title:'ขั้นที่ 2 — โทร 1669',
+   body:'<b>1669</b> คือเบอร์<b>การแพทย์ฉุกเฉิน</b>ของไทย โทรฟรี 24 ชั่วโมง<br><br>• ตะโกนขอความช่วยเหลือจากคนรอบข้าง<br>• โทร 1669 ทันที (หรือให้คนอื่นโทร)<br>• บอกตำแหน่ง อาการ และจำนวนผู้ป่วย<br>• ขอ<b>เครื่อง AED</b> ถ้ามีในบริเวณนั้น<br><br>อย่าวางสายจนกว่าเจ้าหน้าที่จะบอกให้วาง'},
+  {emoji:'🤲', title:'ขั้นที่ 3 — ปั๊มหัวใจให้ถูกวิธี',
+   body:'<b>ตำแหน่ง:</b> กึ่งกลางหน้าอก (ครึ่งล่างของกระดูกอก)<br><br><b>ท่ามือ:</b> เอามือ 2 ข้าง<b>ประสานซ้อนกัน</b> แขนตรง ใช้น้ำหนักตัวกด<br><br><b>ความลึก:</b> กดลงลึก 5-6 ซม.<br><br><b>จังหวะ:</b> เร็ว <b>100-120 ครั้ง/นาที</b><br>(จังหวะเพลง "สุขกันเถอะเรา" หรือ Stayin\' Alive)<br><br>กดแล้วปล่อยให้อกคืนตัวเต็มที่ทุกครั้ง'},
+  {emoji:'⚡', title:'ขั้นที่ 4 — ใช้เครื่อง AED',
+   body:'<b>AED</b> คือเครื่องช็อกไฟฟ้าหัวใจอัตโนมัติ ใช้ง่าย มีเสียงบอกทุกขั้นตอน<br><br>• เปิดเครื่อง แล้วทำตามเสียงสั่ง<br>• แปะแผ่น 2 จุด: <b>ใต้ไหปลาร้าขวา</b> และ <b>ชายโครงซ้าย</b><br>• ระหว่างเครื่องวิเคราะห์ <b>ห้ามแตะตัวผู้ป่วย</b><br>• ถ้าเครื่องสั่งช็อก ตะโกน "ถอย!" แล้วกดปุ่ม<br><br>หลังช็อก ปั๊มหัวใจต่อทันที'},
+  {emoji:'🎓', title:'พร้อมแล้ว! มาทดสอบกัน',
+   body:'ทบทวน 4 ขั้นตอน:<br><br>1️⃣ <b>ประเมิน</b> ความปลอดภัย + เขย่าเรียก<br>2️⃣ <b>โทร 1669</b> ขอความช่วยเหลือ<br>3️⃣ <b>ปั๊มหัวใจ</b> ประสานมือ 100-120 ครั้ง/นาที<br>4️⃣ <b>AED</b> แปะแผ่นให้ถูกตำแหน่ง<br><br>ตอนนี้ลองทำใน AR จริง! ระบบจะจับการเคลื่อนไหวของมือคุณ<br><br><b>"60 วินาที ช่วยชีวิตได้"</b> 💪',
+   quiz:{q:'CPR ต้องกดด้วยจังหวะกี่ครั้งต่อนาที?',
+     opts:['60-80 ครั้ง','100-120 ครั้ง','150-180 ครั้ง'],ans:1}},
+];
+
+let lessonIdx=0, quizAnswered=false;
+
+function openLesson(){
+  $('p-start').style.display='none';
+  $('p-learn').style.display='block';
+  lessonIdx=0;
+  showLesson();
+}
+
+function showLesson(){
+  const L=LESSONS[lessonIdx];
+  quizAnswered=false;
+  $('lesson-emoji').textContent=L.emoji;
+  $('lesson-title').innerHTML=L.title;
+  $('lesson-body').innerHTML=L.body;
+  $('lesson-count').textContent=`${lessonIdx+1}/${LESSONS.length}`;
+  $('lesson-bar').style.width=((lessonIdx+1)/LESSONS.length*100)+'%';
+  $('lesson-prev').style.visibility=lessonIdx===0?'hidden':'visible';
+
+  // quiz on last lesson
+  const qz=$('lesson-quiz');
+  if(L.quiz){
+    qz.style.display='block';
+    qz.innerHTML=`<div style="font-size:12.5px;font-weight:700;margin-bottom:8px;color:#FFB300">📝 ${L.quiz.q}</div>`;
+    L.quiz.opts.forEach((o,i)=>{
+      const b=document.createElement('button');
+      b.className='btn';b.style.cssText='margin:5px 0;font-size:12px;padding:9px;letter-spacing:0;text-transform:none';
+      b.textContent=o;
+      b.onclick=()=>{
+        if(quizAnswered)return;
+        if(i===L.quiz.ans){
+          b.style.borderColor='#00FF88';b.style.color='#00FF88';
+          b.textContent='✓ '+o+' — ถูกต้อง!';
+          quizAnswered=true;beep(900,80);
+          $('lesson-next').textContent='เริ่มภารกิจจริง 🚀';
+          $('lesson-next').style.borderColor='#00FF88';
+          $('lesson-next').style.color='#00FF88';
+        } else {
+          b.style.borderColor='#FF3366';b.style.color='#FF3366';beep(200,150);
+        }
+      };
+      qz.appendChild(b);
+    });
+    $('lesson-next').textContent='เริ่มภารกิจจริง 🚀';
+  } else {
+    qz.style.display='none';
+    $('lesson-next').textContent=lessonIdx===LESSONS.length-1?'เริ่มภารกิจจริง 🚀':'ถัดไป ›';
+    $('lesson-next').style.borderColor='#00D4FF';
+    $('lesson-next').style.color='#00D4FF';
+  }
+}
+
+$('lesson-prev').onclick=()=>{ if(lessonIdx>0){lessonIdx--;showLesson();} };
+$('lesson-next').onclick=()=>{
+  if(lessonIdx<LESSONS.length-1){ lessonIdx++;showLesson(); }
+  else { $('p-learn').style.display='none'; requestSensors(); startAR(); }
+};
 
 function requestSensors(){
   if(typeof DeviceOrientationEvent!=='undefined'&&
@@ -263,7 +407,11 @@ function applyMirror(){
   vid.style.transform = isFront ? 'scaleX(-1)' : 'none';
 }
 
+let poseLms=null;          // full-body pose landmarks
+let poseWristY=null;        // averaged wrist Y for pump detection in body mode
+
 function initMP(){
+  if(bodyMode) return initPose();
   if(window._mf||typeof Hands==='undefined')return;
   try{
     const h=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
@@ -271,8 +419,6 @@ function initMP(){
       minDetectionConfidence:.5,minTrackingConfidence:.5});
     h.onResults(r=>{
       lms=r.multiHandLandmarks||[];
-      // when front camera is mirrored on screen, flip landmark X so
-      // on-canvas markers match what the user sees in the mirror
       if(isFront){
         for(const lm of lms) for(const pt of lm) pt.x=1-pt.x;
       }
@@ -281,21 +427,54 @@ function initMP(){
         h1={x:(lm[0].x+lm[9].x)/2*cv.width,y:(lm[0].y+lm[9].y)/2*cv.height};}
       if(lms[1]){const lm=lms[1];
         h2={x:(lm[0].x+lm[9].x)/2*cv.width,y:(lm[0].y+lm[9].y)/2*cv.height};}
-      // CPR clasp logic:
-      //  - 2 hands detected close together = ประสานมือ ✓
-      //  - OR only 1 "hand" detected (because stacked hands read as one) = also OK
-      //    (real CPR stacks hands so MediaPipe often sees a single blob)
       if(h1&&h2){
         const d=Math.hypot(h1.x-h2.x,h1.y-h2.y);
         clasped=d<Math.min(cv.width,cv.height)*CLASP_DIST_F;
       } else if(h1&&!h2){
-        clasped=true;   // single detected hand during CPR = stacked hands
+        clasped=true;
       } else clasped=false;
     });
     if(window._mcf||typeof Camera==='undefined')return;
     new Camera(vid,{onFrame:async()=>{try{await h.send({image:vid});}catch(_){}}
       ,width:640,height:480}).start();
   }catch(e){}
+}
+
+// ── MediaPipe Pose for full-body mode ──
+function initPose(){
+  if(window._mpf||typeof Pose==='undefined'){ bodyMode=false; return initMP(); }
+  try{
+    const ps=new Pose({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});
+    ps.setOptions({modelComplexity:0,smoothLandmarks:true,
+      minDetectionConfidence:.5,minTrackingConfidence:.5});
+    ps.onResults(r=>{
+      poseLms=r.poseLandmarks||null;
+      if(poseLms){
+        if(isFront) for(const pt of poseLms) pt.x=1-pt.x;
+        // wrists: 15=left, 16=right ; visibility check
+        const lw=poseLms[15], rw=poseLms[16];
+        const sx=poseLms[11], dx2=poseLms[12]; // shoulders
+        // hands together (CPR) if both wrists close
+        let wy=[], wxs=[];
+        if(lw&&lw.visibility>.3){wy.push(lw.y);wxs.push(lw.x);}
+        if(rw&&rw.visibility>.3){wy.push(rw.y);wxs.push(rw.x);}
+        if(wy.length){
+          poseWristY=wy.reduce((a,c)=>a+c,0)/wy.length*cv.height;
+          const mxw=wxs.reduce((a,c)=>a+c,0)/wxs.length*cv.width;
+          h1={x:mxw,y:poseWristY};
+          // clasp = wrists near each other (or only one visible)
+          if(wxs.length===2){
+            const dWrist=Math.hypot((lw.x-rw.x)*cv.width,(lw.y-rw.y)*cv.height);
+            clasped=dWrist<Math.min(cv.width,cv.height)*0.22;
+          } else clasped=true;
+        } else { h1=null; poseWristY=null; clasped=false; }
+        h2=null;
+      } else { h1=null;h2=null;poseWristY=null;clasped=false; }
+    });
+    if(window._mcf||typeof Camera==='undefined')return;
+    new Camera(vid,{onFrame:async()=>{try{await ps.send({image:vid});}catch(_){}}
+      ,width:640,height:480}).start();
+  }catch(e){ bodyMode=false; }
 }
 
 addEventListener('pointermove',e=>{demoX=e.clientX;demoY=e.clientY;},{passive:true});
@@ -313,12 +492,35 @@ function ptr(){
 // SCAN — gyro จริง: เอียงลงพื้น + นิ่ง
 // ═══════════════════════════════════════════════════════
 function beginScan(){
-  phase='scan';scanAccum=0;lastScanT=Date.now();
   $('scanline').style.display='block';
   document.querySelectorAll('.brk').forEach(el=>el.classList.add('show'));
   $('msg').style.display='block';
+  // Full-body mode: no gyro floor scan. Set up the camera-prop placement.
+  if(bodyMode){
+    phase='bodysetup'; bodySetupStart=Date.now();
+    setMsg('🧍 วางมือถือพิงให้เห็นตัวเต็ม แล้วถอยไปคุกเข่า','ระบบกำลังมองหาตัวคุณ…');
+    resize();loop();
+    return;
+  }
+  phase='scan';scanAccum=0;lastScanT=Date.now();
   setMsg('📐 เอียงกล้องชี้ลงพื้น','ระบบใช้ Gyroscope ตรวจมุมจริง');
   resize();loop();
+}
+
+let bodySetupStart=null;
+function bodySetupLogic(){
+  // wait until pose is detected (user visible), then place patient horizontally
+  if(poseLms || demo || (Date.now()-bodySetupStart>6000)){
+    anchored=true;
+    pX=cv.width*.5; pY=cv.height*.5;
+    matStart=Date.now(); matScale=0;
+    phase='mat';
+    beep(820,130);
+    if(navigator.vibrate)navigator.vibrate([25,50,25]);
+    setMsg('👤 ผู้ป่วยนอนขวางหน้าคุณ','คุกเข่าข้างผู้ป่วย พร้อมเริ่มช่วยชีวิต');
+  } else {
+    setMsg('🧍 ถอยให้เห็นตัวเต็มในกล้อง','ระบบกำลังมองหาตัวคุณ…');
+  }
 }
 
 function scanLogic(){
@@ -522,55 +724,95 @@ function drawCallScene(w,h){
 function startCPR(){
   phase='cpr';compr=0;bwin=[];cbpm=0;cA=0;
   pumpState='up';pumpRefY=null;pumpExtreme=null;lastPumpT=0;cprDepth=0;
+  strokeDepth=0;lastStrokeQ=0;
   setTag('SCENE 3 — CPR');setDots(2);
   postureEl.style.display='block';
-  setMsg('🤲 ประสานมือซ้อนกัน แล้วกดลง-ปล่อยขึ้น ให้สุด',
-    'ต้องกดลงจริงๆ ลึกพอ ระบบถึงจะนับ — จังหวะ 100-120 ครั้ง/นาที');
+  if(kneelMode){
+    setMsg('🧎 วางมือถือพิงไว้ คุกเข่าข้างผู้ป่วย แล้วกดจริง',
+      'ประสานมือ กดลงให้ลึก (ดูแถบความลึกขวาจอ) จังหวะ 100-120/นาที');
+  } else {
+    setMsg('🤲 ประสานมือซ้อนกัน แล้วกดลง-ปล่อยขึ้น ให้สุด',
+      'ต้องกดลงให้ลึกพอ (ดูแถบความลึกขวาจอ) จังหวะ 100-120/นาที');
+  }
 }
 
 function cprMotion(w,h){
-  const B=getB();
+  const B=bodyMode?Math.min(w,h)*.34:getB();
   const p=ptr();
-  const cx=aX(),cy=aY()+(-B*.40)*PERSP;
-  const zR=B*.5;
+  // body mode: chest at patient center (rotated body); else upper torso
+  const cx=aX(), cy=bodyMode? aY() : aY()+(-B*.40)*PERSP;
+  const zR=bodyMode?B*.7:B*.5;
   inChest=false;
 
   if(demo){postureEl.className='good';postureEl.textContent='🎮 Demo — แตะจอ = ปั๊ม';}
-  else if(clasped){postureEl.className='good';postureEl.textContent='🤲 ท่าถูกต้อง ✓ ปั๊มขึ้น-ลงแรงๆ!';}
+  else if(clasped){postureEl.className='good';postureEl.textContent=bodyMode?'🧍 ก้มกดหน้าอกแรงๆ!':kneelMode?'🧎 คุกเข่า กดลงให้ลึก!':'🤲 ท่าถูกต้อง ✓ ปั๊มขึ้น-ลงแรงๆ!';}
   else if(h1&&h2){postureEl.className='';postureEl.textContent='🤲 เอามือมาประสานซ้อนกัน!';}
   else {postureEl.className='';postureEl.textContent='👀 ยกมือที่ประสานเข้ากล้อง';}
 
   if(p){
-    const dx=p.x-cx,dy=(p.y-cy)/PERSP;
+    const dx=p.x-cx,dy=bodyMode?(p.y-cy):(p.y-cy)/PERSP;
     if(Math.hypot(dx,dy)<zR/0.7)inChest=true;
   }
 
-  // ── Genuine compression detection ──
-  // A valid compression = press DOWN by >= STROKE_MIN px, then release UP by >= STROKE_MIN px.
-  // We track the lowest (max y) and highest (min y) points and only count a full stroke.
-  const STROKE_MIN=B*0.16;   // required vertical travel (scales with patient size)
+  // ── Genuine compression detection with DEPTH tracking ──
+  // STROKE_TARGET = ideal full-depth travel (like pressing 5-6cm on a manikin)
+  const STROKE_MIN   = B*0.16;   // minimum to register a stroke at all
+  const STROKE_TARGET= B*0.30;   // ideal depth → full depth meter
   if(inChest&&p&&(clasped||demo)){
     if(pumpRefY===null){ pumpRefY=p.y; pumpExtreme=p.y; }
     if(pumpState==='up'){
-      // waiting to go down: track lowest point reached so far from rest
-      if(p.y>pumpExtreme) pumpExtreme=p.y;       // moving down (y increases)
-      if(pumpExtreme-pumpRefY>=STROKE_MIN){       // pressed down enough
-        pumpState='down'; pumpRefY=pumpExtreme; pumpExtreme=p.y;
-        // visual: chest compressing
-        cprDepth=1;
-      } else if(p.y<pumpRefY){ pumpRefY=p.y; }    // re-baseline if drifting up
-    } else { // 'down' → waiting to release up
-      if(p.y<pumpExtreme) pumpExtreme=p.y;        // moving up (y decreases)
-      if(pumpRefY-pumpExtreme>=STROKE_MIN){       // released up enough = 1 full compression
+      if(p.y>pumpExtreme) pumpExtreme=p.y;        // moving down
+      const trav=pumpExtreme-pumpRefY;
+      strokeDepth=Math.max(0,Math.min(1,trav/STROKE_TARGET));   // live depth gauge
+      cprDepth=strokeDepth;
+      if(trav>=STROKE_MIN){
+        pumpState='down'; lastStrokeQ=strokeDepth;
+        pumpRefY=pumpExtreme; pumpExtreme=p.y;
+      } else if(p.y<pumpRefY){ pumpRefY=p.y; }
+    } else {
+      if(p.y<pumpExtreme) pumpExtreme=p.y;        // moving up
+      if(pumpRefY-pumpExtreme>=STROKE_MIN){
         pumpState='up'; pumpRefY=pumpExtreme; pumpExtreme=p.y;
         registerCompression();
       } else if(p.y>pumpRefY){ pumpRefY=p.y; }
     }
   } else {
-    pumpRefY=null; pumpExtreme=null;
+    pumpRefY=null; pumpExtreme=null; strokeDepth=0;
     if(pumpState!=='up') pumpState='up';
   }
-  cprDepth=Math.max(0,cprDepth-0.08);
+  cprDepth=Math.max(0,cprDepth-0.05);
+
+  // Draw depth meter (right side of screen)
+  drawDepthMeter(w,h);
+}
+
+function drawDepthMeter(w,h){
+  const mx=w-34, my=h*.32, mh=h*.34, mw=14;
+  // track
+  G.fillStyle='rgba(0,0,0,.45)';
+  G.fillRect(mx-mw/2,my,mw,mh);
+  // target band (good depth zone, upper portion = deeper)
+  const tTop=my+mh*0.08, tBot=my+mh*0.42;
+  G.fillStyle='rgba(0,255,136,.25)';
+  G.fillRect(mx-mw/2,tTop,mw,tBot-tTop);
+  // current fill (from bottom up by depth)
+  const lvl=(pumpState==='down'?lastStrokeQ:strokeDepth);
+  const fillH=mh*Math.min(1,lvl);
+  const col=lvl>=0.78?'#00FF88':lvl>=0.5?'#FFB300':'#FF6633';
+  G.fillStyle=col;
+  G.fillRect(mx-mw/2,my+mh-fillH,mw,fillH);
+  // border
+  G.strokeStyle='rgba(255,255,255,.3)';G.lineWidth=1.5;
+  G.strokeRect(mx-mw/2,my,mw,mh);
+  // label
+  G.save();
+  G.translate(mx+14,my+mh/2);G.rotate(Math.PI/2);
+  G.font='bold 9px system-ui';G.fillStyle='rgba(255,255,255,.6)';
+  G.textAlign='center';G.fillText('ความลึก',0,0);
+  G.restore();
+  // target arrow
+  G.fillStyle='rgba(0,255,136,.7)';G.font='9px system-ui';G.textAlign='right';
+  G.fillText('◄ ลึกพอ',mx-mw/2-2,tBot-4);
 }
 
 function registerCompression(){
@@ -597,13 +839,19 @@ function registerCompression(){
   cbpm=Math.round(bwin.reduce((a,c)=>a+c,0)/bwin.length);
 
   const goodForm=clasped||demo;
-  if(cbpm>=100&&cbpm<=120&&goodForm){pts=12;txt='PERFECT!';col='#FFB300';hz=1050;}
-  else if(cbpm>=95&&cbpm<=125){pts=7;txt='GOOD';col='#00D4FF';hz=820;}
+  const goodRate=cbpm>=100&&cbpm<=120;
+  const okRate=cbpm>=95&&cbpm<=125;
+  const goodDepth=demo||lastStrokeQ>=0.78;   // pressed deep enough
+  const okDepth=demo||lastStrokeQ>=0.5;
+
+  if(goodRate&&goodForm&&goodDepth){pts=12;txt='PERFECT!';col='#FFB300';hz=1050;}
+  else if(okRate&&okDepth){pts=7;txt='GOOD';col='#00D4FF';hz=820;}
+  else if(!okDepth){pts=3;txt='กดให้ลึกขึ้น!';col='#FF6633';hz=300;}
   else if(cbpm<95){pts=3;txt='เร็วขึ้น!';col='#FF9900';hz=360;}
   else{pts=3;txt='ช้าลง!';col='#FF9900';hz=360;}
   beep(hz,60);compr++;sc+=pts;
   setFb(txt,col);updHUD();
-  if(navigator.vibrate)navigator.vibrate(28);
+  if(navigator.vibrate)navigator.vibrate(goodDepth?40:20);
   if(compr>=TOTAL){
     phase='cpr_done';postureEl.style.display='none';
     setFb('✅ ครบ 30!','#00FF88');
@@ -779,6 +1027,7 @@ function draw(){
   updDistF();
 
   if(phase==='scan'){scanLogic();drawScan(w,h);drawPointer();return;}
+  if(phase==='bodysetup'){bodySetupLogic();drawBodySetup(w,h);drawPointer();return;}
   if(phase==='mat'&&matStart){
     const t=Math.min(1,(Date.now()-matStart)/750);
     matScale=easeOutBack(t);
@@ -793,6 +1042,14 @@ function draw(){
     return;
   }
 
+  // Body mode: patient fixed at screen center (camera is propped, not gyro-anchored)
+  if(bodyMode){
+    drawPatient(w,h);
+    sceneLogic(w,h);
+    drawPointer();
+    return;
+  }
+
   if(patientOnScreen()){
     drawPatient(w,h);
     sceneLogic(w,h);
@@ -800,6 +1057,19 @@ function draw(){
     drawOffscreenHint(w,h);
   }
   drawPointer();
+}
+
+function drawBodySetup(w,h){
+  const t=Date.now(),pu=(Math.sin(t/450)+1)*.5;
+  // body outline guide in center
+  G.strokeStyle=poseLms?`rgba(0,255,136,${.5+pu*.3})`:`rgba(255,179,0,${.4+pu*.3})`;
+  G.lineWidth=2;G.setLineDash([10,8]);
+  G.strokeRect(w*.2,h*.12,w*.6,h*.76);
+  G.setLineDash([]);
+  G.font='bold 15px system-ui';G.textAlign='center';
+  G.fillStyle=poseLms?'#00FF88':'rgba(255,255,255,.7)';
+  G.fillText(poseLms?'✓ พบตัวคุณแล้ว':'ถอยให้เห็นตัวเต็ม',w*.5,h*.5);
+  if(poseLms) drawPointer();
 }
 
 // Off-screen indicator: บอกทิศที่ผู้ป่วยอยู่
@@ -874,6 +1144,32 @@ function drawGrid(w,h){
 // ═══════════════════════════════════════════════════════
 function drawPointer(){
   const t=Date.now(),pu=(Math.sin(t/300)+1)*.5;
+
+  // Full-body mode: draw pose skeleton
+  if(bodyMode&&poseLms){
+    const W=cv.width,H=cv.height;
+    const P=i=>poseLms[i]&&poseLms[i].visibility>.3?{x:poseLms[i].x*W,y:poseLms[i].y*H}:null;
+    const bones=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
+    G.strokeStyle=clasped?'rgba(0,255,136,.5)':'rgba(0,212,255,.45)';G.lineWidth=3;
+    for(const [a,b] of bones){
+      const pa=P(a),pb=P(b);
+      if(pa&&pb){G.beginPath();G.moveTo(pa.x,pa.y);G.lineTo(pb.x,pb.y);G.stroke();}
+    }
+    // joints
+    for(const i of [11,12,13,14,15,16,23,24]){
+      const p=P(i);if(!p)continue;
+      G.beginPath();G.arc(p.x,p.y,5,0,Math.PI*2);
+      G.fillStyle='rgba(0,212,255,.7)';G.fill();
+    }
+    // highlight clasped hands
+    if(h1){
+      G.beginPath();G.arc(h1.x,h1.y,18,0,Math.PI*2);
+      G.strokeStyle=clasped?`rgba(0,255,136,${.7+pu*.3})`:`rgba(255,179,0,${.6+pu*.3})`;
+      G.lineWidth=3;G.stroke();
+    }
+    return;
+  }
+
   if(h1&&h2){
     G.beginPath();G.moveTo(h1.x,h1.y);G.lineTo(h2.x,h2.y);
     G.strokeStyle=clasped?'rgba(0,255,136,.5)':'rgba(255,179,0,.35)';
@@ -904,21 +1200,23 @@ function getB(){return Math.min(cv.width,cv.height)*.26*distF;}
 function getS(){return getB()*matScale;}
 
 function drawPatient(w,h){
-  const B=getB();
+  const B=bodyMode? Math.min(w,h)*.34*matScale : getB();
   const dp=cA*B*.044;
   const AXX=aX(),AYY=aY();
+  const persp=bodyMode?0.62:PERSP;   // less squash in body mode (side view)
   G.save();
   G.translate(AXX,AYY);
+  if(bodyMode) G.rotate(Math.PI/2);  // นอนขวาง: rotate 90° → head to the side
   if(matScale<1){
     const burst=1-matScale;
     for(let i=0;i<8;i++){
       const a=(i/8)*Math.PI*2,r=B*burst*.9;
-      G.beginPath();G.arc(Math.cos(a)*r,Math.sin(a)*r*PERSP,3,0,Math.PI*2);
+      G.beginPath();G.arc(Math.cos(a)*r,Math.sin(a)*r*persp,3,0,Math.PI*2);
       G.fillStyle=`rgba(0,212,255,${burst*.8})`;G.fill();
     }
   }
   G.scale(matScale,matScale);
-  G.scale(1,PERSP);
+  G.scale(1,persp);
 
   // soft ground shadow (radial, feathered)
   const sh=G.createRadialGradient(0,B*.05,0,0,B*.05,B*1.5);
@@ -1045,9 +1343,10 @@ function drawPatient(w,h){
 }
 
 function drawChestTarget(B,dp){
-  const Rx=B*matScale*.34,Ry=Rx*PERSP;
-  // chest sits on upper torso of the lying body (body-Y ≈ -0.40)
-  const cx=aX(),cy=aY()+(-B*.40+dp)*PERSP*matScale;
+  const bm=bodyMode;
+  // B already includes matScale in both modes at call site
+  const Rx=bm?B*.42:B*matScale*.34, Ry=bm?Rx:Rx*PERSP;
+  const cx=aX(), cy=bm? aY() : aY()+(-B*.40+dp)*PERSP*matScale;
   const p=(Math.sin(Date.now()/430)+1)*.5;
   const act=inChest&&(clasped||demo);
   const [r,g,b]=act?[0,255,136]:[255,179,0];

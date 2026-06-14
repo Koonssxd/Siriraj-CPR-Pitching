@@ -121,7 +121,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;
 // CONFIG
 // ═══════════════════════════════════════════════════════
 const TOTAL=30, PERSP=0.46, DWELL_MS=1100;
-const PUMP_MIN=13, WAVE_NEED=4;
+const PUMP_MIN=13, WAVE_NEED=3;
 const FLOOR_BETA_MIN=65, FLOOR_BETA_MAX=145;  // device tilt = pointing at floor
 const STEADY_MAX=2.5, SCAN_NEED=1500;
 const CLASP_DIST_F=0.16;
@@ -146,7 +146,7 @@ let isFront=false;         // true if using front (selfie) camera → mirror
 let dwellTarget=null,dwellStart=0,dwellProg=0;
 let waveDir=0,waveCount=0,lastWX=null;
 let compr=0,cbpm=0,bwin=[];
-let pumpState='up',pumpRefY=null,lastPumpT=0;
+let pumpState='up',pumpRefY=null,pumpExtreme=null,lastPumpT=0,cprDepth=0;
 let cA=0,inChest=false;
 let aedPlaced=new Set(),aedArmed=false;
 let callSeq=['1','6','6','9'],callIdx=0,callZones=null;
@@ -410,32 +410,47 @@ function sceneLogic(w,h){
     if(updateDwell([z])==='safe'){
       sc+=25;updHUD();setFb('+25','#00D4FF');
       phase='safety1';waveCount=0;lastWX=null;
-      setMsg('👋 โบกมือไปมาเหนือตัวผู้ป่วย = เขย่าปลุก','ขยับมือซ้าย-ขวา 4 ครั้ง');
+      setMsg('🤚 เอามือวางบนไหล่ผู้ป่วย แล้วเขย่า','วางมือในกรอบไหล่ แล้วขยับมือไปมา');
     }
   }
   else if(phase==='safety1'){
     const p=ptr();
-    const zx=AXX-B*.7,zy=AYY-B*.9*PERSP,zw=B*1.4,zh=B*1.8*PERSP;
-    const pu=(Math.sin(Date.now()/400)+1)*.5;
-    G.strokeStyle=`rgba(255,179,0,${.35+pu*.3})`;G.lineWidth=1.6;
-    G.setLineDash([9,6]);G.strokeRect(zx,zy,zw,zh);G.setLineDash([]);
-    G.fillStyle='#FFB300';G.font='bold 13px system-ui';G.textAlign='center';
-    G.fillText(`โบกมือ ${waveCount}/${WAVE_NEED}`,AXX,zy-12);
-    if(p&&p.x>zx&&p.x<zx+zw&&p.y>zy&&p.y<zy+zh){
+    // shoulder zone (upper body, near head end)
+    const zcx=AXX, zcy=AYY-B*1.05*PERSP;
+    const zw=B*1.0, zh=B*.55*PERSP*matScale + B*.2;
+    const zx=zcx-zw/2, zy=zcy-zh/2;
+    const pu=(Math.sin(Date.now()/350)+1)*.5;
+    const handIn = p && p.x>zx && p.x<zx+zw && p.y>zy && p.y<zy+zh;
+    // draw shoulder target zone
+    G.strokeStyle=handIn?`rgba(0,255,136,${.6+pu*.3})`:`rgba(255,179,0,${.4+pu*.35})`;
+    G.lineWidth=2.2;G.setLineDash([10,6]);
+    G.strokeRect(zx,zy,zw,zh);G.setLineDash([]);
+    if(handIn){
+      G.fillStyle=`rgba(0,255,136,.1)`;G.fillRect(zx,zy,zw,zh);
+    }
+    G.fillStyle=handIn?'#00FF88':'#FFB300';
+    G.font='bold 13px system-ui';G.textAlign='center';
+    G.fillText(handIn?`เขย่า! ${waveCount}/${WAVE_NEED}`:'🤚 วางมือบนไหล่',zcx,zy-12);
+
+    if(handIn){
       if(lastWX!=null){
         const dx=p.x-lastWX;
-        if(Math.abs(dx)>8){
+        if(Math.abs(dx)>6){
           const dir=Math.sign(dx);
-          if(dir!==waveDir&&waveDir!==0){waveCount++;beep(600+waveCount*80,45);}
+          if(dir!==waveDir&&waveDir!==0){
+            waveCount++;beep(560+waveCount*70,50);
+            if(navigator.vibrate)navigator.vibrate(20);
+          }
           waveDir=dir;
         }
       }
       lastWX=p.x;
-    } else lastWX=null;
+    } else { lastWX=null; }
+
     if(waveCount>=WAVE_NEED){
       sc+=25;updHUD();setFb('ไม่ตอบสนอง!','#FF3366');
       phase='safety2';
-      setMsg('🚨 ผู้ป่วยไม่ตอบสนอง!','ค้างมือบนปุ่มโทร');
+      setMsg('🚨 ผู้ป่วยไม่ตอบสนอง ไม่หายใจ!','ค้างมือบนปุ่มโทร 1669');
     }
   }
   else if(phase==='safety2'){
@@ -447,7 +462,9 @@ function sceneLogic(w,h){
   else if(phase==='cpr'){cprMotion(w,h);}
   else if(phase==='aed'){drawAEDScene(w,h);}
   else if(phase==='shock'){
-    const z={id:'shock',x:AXX,y:Math.max(90,AYY-B*1.45*PERSP-90),r:50,label:'SHOCK!'};
+    drawAEDScene(w,h);  // keep showing torso with placed pads
+    const T=aedTorso(w,h);
+    const z={id:'shock',x:w*.5,y:Math.min(h-120,T.cy+T.th*.62),r:52,label:'SHOCK!'};
     drawHoverBtn(z,'#FF3366','⚡');
     if(updateDwell([z])==='shock'){
       sc+=70;updHUD();beep(200,400);
@@ -504,11 +521,11 @@ function drawCallScene(w,h){
 // ═══════════════════════════════════════════════════════
 function startCPR(){
   phase='cpr';compr=0;bwin=[];cbpm=0;cA=0;
-  pumpState='up';pumpRefY=null;lastPumpT=0;
+  pumpState='up';pumpRefY=null;pumpExtreme=null;lastPumpT=0;cprDepth=0;
   setTag('SCENE 3 — CPR');setDots(2);
   postureEl.style.display='block';
-  setMsg('🤲 ประสานมือซ้อนกัน วางบนหน้าอก แล้วปั๊มขึ้น-ลง',
-    'วางมือซ้อนประสานกันตรงกลางอก ตามจังหวะ 110 ครั้ง/นาที');
+  setMsg('🤲 ประสานมือซ้อนกัน แล้วกดลง-ปล่อยขึ้น ให้สุด',
+    'ต้องกดลงจริงๆ ลึกพอ ระบบถึงจะนับ — จังหวะ 100-120 ครั้ง/นาที');
 }
 
 function cprMotion(w,h){
@@ -519,7 +536,7 @@ function cprMotion(w,h){
   inChest=false;
 
   if(demo){postureEl.className='good';postureEl.textContent='🎮 Demo — แตะจอ = ปั๊ม';}
-  else if(clasped){postureEl.className='good';postureEl.textContent='🤲 ท่าถูกต้อง ✓ ปั๊มเลย!';}
+  else if(clasped){postureEl.className='good';postureEl.textContent='🤲 ท่าถูกต้อง ✓ ปั๊มขึ้น-ลงแรงๆ!';}
   else if(h1&&h2){postureEl.className='';postureEl.textContent='🤲 เอามือมาประสานซ้อนกัน!';}
   else {postureEl.className='';postureEl.textContent='👀 ยกมือที่ประสานเข้ากล้อง';}
 
@@ -528,35 +545,63 @@ function cprMotion(w,h){
     if(Math.hypot(dx,dy)<zR/0.7)inChest=true;
   }
 
+  // ── Genuine compression detection ──
+  // A valid compression = press DOWN by >= STROKE_MIN px, then release UP by >= STROKE_MIN px.
+  // We track the lowest (max y) and highest (min y) points and only count a full stroke.
+  const STROKE_MIN=B*0.16;   // required vertical travel (scales with patient size)
   if(inChest&&p&&(clasped||demo)){
-    if(pumpRefY===null)pumpRefY=p.y;
-    const dy=p.y-pumpRefY;
-    if(pumpState==='up'&&dy>PUMP_MIN){pumpState='down';pumpRefY=p.y;}
-    else if(pumpState==='down'&&dy<-PUMP_MIN){
-      pumpState='up';pumpRefY=p.y;registerCompression();
-    } else {
-      if(pumpState==='up'&&p.y<pumpRefY)pumpRefY=p.y;
-      if(pumpState==='down'&&p.y>pumpRefY)pumpRefY=p.y;
+    if(pumpRefY===null){ pumpRefY=p.y; pumpExtreme=p.y; }
+    if(pumpState==='up'){
+      // waiting to go down: track lowest point reached so far from rest
+      if(p.y>pumpExtreme) pumpExtreme=p.y;       // moving down (y increases)
+      if(pumpExtreme-pumpRefY>=STROKE_MIN){       // pressed down enough
+        pumpState='down'; pumpRefY=pumpExtreme; pumpExtreme=p.y;
+        // visual: chest compressing
+        cprDepth=1;
+      } else if(p.y<pumpRefY){ pumpRefY=p.y; }    // re-baseline if drifting up
+    } else { // 'down' → waiting to release up
+      if(p.y<pumpExtreme) pumpExtreme=p.y;        // moving up (y decreases)
+      if(pumpRefY-pumpExtreme>=STROKE_MIN){       // released up enough = 1 full compression
+        pumpState='up'; pumpRefY=pumpExtreme; pumpExtreme=p.y;
+        registerCompression();
+      } else if(p.y>pumpRefY){ pumpRefY=p.y; }
     }
-  } else pumpRefY=null;
+  } else {
+    pumpRefY=null; pumpExtreme=null;
+    if(pumpState!=='up') pumpState='up';
+  }
+  cprDepth=Math.max(0,cprDepth-0.08);
 }
 
 function registerCompression(){
   if(phase!=='cpr'||compr>=TOTAL)return;
   const now=Date.now();
-  if(now-lastPumpT<240)return;
-  const iv=lastPumpT>0?now-lastPumpT:545;
+  if(now-lastPumpT<260)return;   // debounce (max ~230 BPM)
+  const hadPrev=lastPumpT>0;
+  const iv=hadPrev?now-lastPumpT:545;
   lastPumpT=now;
-  const b=Math.round(60000/iv);
-  if(b>=30&&b<=220){bwin.push(b);if(bwin.length>6)bwin.shift();
-    cbpm=Math.round(bwin.reduce((a,c)=>a+c,0)/bwin.length);}
-  let pts,txt,col,hz;
+  cA=1;
+
+  // BPM measured from REAL interval between completed strokes
+  let txt,col,hz,pts;
+  if(!hadPrev){
+    // first compression: no rate yet — neutral
+    txt='เริ่ม!';col='#00D4FF';hz=700;pts=4;
+    compr++; sc+=pts;
+    beep(hz,55); setFb(txt,col); updHUD();
+    if(navigator.vibrate)navigator.vibrate(28);
+    return;
+  }
+  const inst=Math.round(60000/iv);
+  bwin.push(inst); if(bwin.length>5)bwin.shift();
+  cbpm=Math.round(bwin.reduce((a,c)=>a+c,0)/bwin.length);
+
   const goodForm=clasped||demo;
   if(cbpm>=100&&cbpm<=120&&goodForm){pts=12;txt='PERFECT!';col='#FFB300';hz=1050;}
-  else if(cbpm>=90&&cbpm<=130){pts=6;txt='GOOD';col='#00D4FF';hz=780;}
-  else if(cbpm<90){pts=2;txt='เร็วขึ้น!';col='#FF9900';hz=340;}
-  else{pts=2;txt='ช้าลง!';col='#FF9900';hz=340;}
-  beep(hz,60);cA=1;compr++;sc+=pts;
+  else if(cbpm>=95&&cbpm<=125){pts=7;txt='GOOD';col='#00D4FF';hz=820;}
+  else if(cbpm<95){pts=3;txt='เร็วขึ้น!';col='#FF9900';hz=360;}
+  else{pts=3;txt='ช้าลง!';col='#FF9900';hz=360;}
+  beep(hz,60);compr++;sc+=pts;
   setFb(txt,col);updHUD();
   if(navigator.vibrate)navigator.vibrate(28);
   if(compr>=TOTAL){
@@ -568,35 +613,92 @@ function registerCompression(){
 }
 
 // ═══════════════════════════════════════════════════════
-// AED
+// AED — close-up torso diagram with 2 clearly-spaced pads
 // ═══════════════════════════════════════════════════════
 const AED_Z=[
-  {id:'a0',label:'ใต้ไหปลาร้า\nขวา',dx:.20,dy:-.62,ok:true},
-  {id:'a1',label:'กลางอก',dx:0,dy:-.40,ok:false},
-  {id:'a2',label:'ชายโครง\nซ้าย',dx:-.20,dy:-.16,ok:true},
-  {id:'a3',label:'หน้าท้อง',dx:0,dy:.14,ok:false},
+  {id:'a0',label:'ใต้ไหปลาร้าขวา', nx:-.30, ny:-.34, ok:true},  // patient's right = screen left
+  {id:'a1',label:'ชายโครงซ้าย',    nx: .30, ny: .24, ok:true},  // patient's left = screen right
+  {id:'a2',label:'กลางอก',          nx: .02, ny:-.05, ok:false},
+  {id:'a3',label:'หน้าท้อง',        nx:-.02, ny: .46, ok:false},
 ];
 
 function startAED(){
   phase='aed';aedPlaced=new Set();aedArmed=false;
   setTag('SCENE 4 — AED');setDots(3);
-  setMsg('⚡ ค้างมือบน 2 ตำแหน่งที่ถูกต้อง','ใต้ไหปลาร้าขวา + ชายโครงซ้าย');
+  setMsg('⚡ แปะแผ่น AED 2 จุดให้ถูก','ค้างมือบนตำแหน่งที่ถูกต้อง: ใต้ไหปลาร้าขวา + ชายโครงซ้าย');
+}
+
+// big close-up torso centered on screen for clear pad selection
+function aedTorso(w,h){
+  const cx=w*.5, cy=h*.46;
+  const tw=Math.min(w*.62, 300), th=tw*1.35;
+  return {cx,cy,tw,th};
 }
 
 function drawAEDScene(w,h){
-  const B=getB(),AXX=aX(),AYY=aY();
+  const T=aedTorso(w,h);
+
+  // ── draw close-up bare torso (front view, like AED trainer) ──
+  G.save();
+  // shadow
+  G.globalAlpha=.3;G.fillStyle='#000';
+  G.beginPath();G.ellipse(T.cx,T.cy+T.th*.5,T.tw*.6,T.th*.12,0,0,Math.PI*2);G.fill();
+  G.globalAlpha=1;
+  // neck + head hint (top)
+  G.fillStyle='#FFCFA0';
+  fEl(T.cx,T.cy-T.th*.52,T.tw*.16,T.tw*.18,'#FFCFA0');
+  // torso (skin, bare chest for pads)
+  fRR(T.cx-T.tw*.42,T.cy-T.th*.42,T.tw*.84,T.th*.84,T.tw*.18,'#F2C49C');
+  // pectoral / rib shading
+  G.globalAlpha=.10;G.fillStyle='#000';
+  G.beginPath();G.ellipse(T.cx-T.tw*.18,T.cy-T.th*.2,T.tw*.16,T.tw*.13,0,0,Math.PI*2);G.fill();
+  G.beginPath();G.ellipse(T.cx+T.tw*.18,T.cy-T.th*.2,T.tw*.16,T.tw*.13,0,0,Math.PI*2);G.fill();
+  G.globalAlpha=1;
+  // center sternum line
+  G.strokeStyle='rgba(0,0,0,.08)';G.lineWidth=2;
+  G.beginPath();G.moveTo(T.cx,T.cy-T.th*.32);G.lineTo(T.cx,T.cy+T.th*.2);G.stroke();
+  G.restore();
+
+  // ── pad zones ──
   const zones=AED_Z.map(z=>({id:z.id,label:z.label,ok:z.ok,
-    x:AXX+z.dx*B,y:AYY+z.dy*B*PERSP*matScale,r:30}));
+    x:T.cx+z.nx*T.tw, y:T.cy+z.ny*T.th, r:Math.max(34,T.tw*.15)}));
+
   for(const z of zones){
     const placed=aedPlaced.has(z.id);
     const col=placed?(aedArmed?'#00FF88':'#FFB300'):'#00D4FF';
-    drawHoverBtn({...z,label:placed?'✓':z.label},col);
+    // pad = rounded square (like real AED electrode)
+    const active=dwellTarget===z.id;
+    const pz=(Math.sin(Date.now()/450)+1)*.5;
+    G.save();
+    G.beginPath();
+    const pr=z.r*.92;
+    G.roundRect?G.roundRect(z.x-pr,z.y-pr,pr*2,pr*2,10):
+      G.rect(z.x-pr,z.y-pr,pr*2,pr*2);
+    G.fillStyle=placed?hexA(col,.28):hexA(col,.12);G.fill();
+    G.strokeStyle=active?'#00FF88':hexA(col,.6+pz*.3);G.lineWidth=2.5;G.stroke();
+    // dwell progress
+    if(active&&dwellProg>0){
+      G.beginPath();
+      G.arc(z.x,z.y,z.r+8,-Math.PI/2,-Math.PI/2+dwellProg*Math.PI*2);
+      G.strokeStyle='#00FF88';G.lineWidth=4;G.lineCap='round';G.stroke();G.lineCap='butt';
+    }
+    // icon + label
+    G.textAlign='center';
+    G.font=`${Math.round(z.r*.5)}px system-ui`;G.textBaseline='middle';
+    G.fillStyle='#fff';G.fillText(placed?(aedArmed?'✓':'⚡'):'＋',z.x,z.y-z.r*.12);
+    G.font='bold 10px system-ui';G.textBaseline='top';
+    G.fillStyle=active?'#00FF88':'#fff';
+    G.fillText(z.label,z.x,z.y+z.r*.42);
+    G.textBaseline='alphabetic';
+    G.restore();
   }
+
   if(aedArmed)return;
   const hit=updateDwell(zones);
   if(hit&&!aedPlaced.has(hit)){
     if(aedPlaced.size>=2)return;
     aedPlaced.add(hit);beep(660,50);
+    if(navigator.vibrate)navigator.vibrate(25);
     if(aedPlaced.size===2){
       const ok=[...aedPlaced].every(id=>AED_Z.find(z=>z.id===id).ok);
       if(ok){
@@ -667,6 +769,13 @@ function draw(){
     if(t>=1){matScale=1;afterMat();}
   }
   if(!anchored){drawPointer();return;}
+
+  // AED & shock use a dedicated close-up diagram, not the floor patient
+  if(phase==='aed'||phase==='shock'){
+    sceneLogic(w,h);
+    drawPointer();
+    return;
+  }
 
   if(patientOnScreen()){
     drawPatient(w,h);
@@ -889,7 +998,8 @@ function drawChestTarget(B,dp){
   G.font=`bold ${Math.max(11,Math.round(Rx*.2))}px system-ui`;
   G.fillStyle=`rgba(${r},${g},${b},${.85+p*.1})`;
   G.textAlign='center';G.textBaseline='top';
-  const label=!inChest?'เอามือมาวางที่นี่':!clasped&&!demo?'ประสานมือซ้อนกัน!':'ปั๊มขึ้น-ลง!';
+  const label=!inChest?'เอามือมาวางที่นี่':!clasped&&!demo?'ประสานมือซ้อนกัน!':
+    pumpState==='down'?'ปล่อยขึ้น!':'กดลงให้สุด!';
   G.fillText(label,cx,cy+Ry*1.25);
   G.textBaseline='alphabetic';
   if(cA>.04){

@@ -182,7 +182,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
         text-transform:uppercase;margin-bottom:9px">เลือกโหมดฝึก</div>
       <div style="display:flex;gap:6px;margin-bottom:18px">
         <button id="mode-stand" class="modebtn">📱<span>ถือมือถือ</span><i>ใช้ง่าย</i></button>
-        <button id="mode-kneel" class="modebtn">🧎<span>คุกเข่า</span><i>กดจริง</i></button>
         <button id="mode-body" class="modebtn">🧍<span>ทั้งตัว</span><i>สมจริงสุด</i></button>
       </div>
 
@@ -247,6 +246,8 @@ const VFOV  = 62;     // vertical field of view (deg)
 let phase='init', demo=false, sc=0;
 let matStart=null, matScale=0, anchored=false;
 let anchorA=null;          // yaw reference at placement
+let anchorBeta=null;       // pitch reference at placement
+let lockBaseX=null,lockBaseY=null;  // screen point where patient was locked
 let beta=null,gamma=null,alpha=null,prevBeta=null,prevGamma=null,moveRate=99;
 let scanAccum=0,lastScanT=0,sensorOK=false;
 let distF=1;               // distance scale factor (recomputed per frame)
@@ -291,23 +292,33 @@ function updHUD(){$('n-s').textContent=sc;$('n-c').textContent=compr;
 // ═══════════════════════════════════════════════════════
 function focalPx(){ return (cv.height/2)/Math.tan(VFOV*Math.PI/360); }
 
-function groundY(){
-  // beta=90 → phone vertical, back camera looks at horizon
-  // beta>90 (toward 135-180) → phone tilts back, camera points DOWN at floor
-  if(!sensorOK||beta==null) return cv.height*.55;  // fallback static
-  const pitchDown=(Math.max(70,Math.min(170,beta))-90)*Math.PI/180; // camera down-angle
-  const baseAng=Math.atan(CAM_H/ANCH_D);   // angle below horizon of the anchor point on floor
-  const rel=baseAng-pitchDown;             // angle of anchor relative to optical axis
-  // rel>0 → anchor below center; rel<0 → above center
-  return cv.height/2 + Math.tan(rel)*focalPx();
+// Raw target position from the locked spot + camera-angle delta since lock.
+// Patient stays where it was placed and only shifts by how much the camera moved.
+function rawX(){
+  if(lockBaseX==null) return cv.width*.5;
+  if(!sensorOK||alpha==null||anchorA==null) return lockBaseX;
+  let d=((alpha-anchorA+540)%360)-180;        // yaw change since lock (deg)
+  return lockBaseX - d*(focalPx()*Math.PI/180);
 }
-function groundX(){
-  if(!sensorOK||alpha==null||anchorA==null) return cv.width*.5;
-  let d=((alpha-anchorA+540)%360)-180;     // yaw delta, wrapped
-  return cv.width/2 + d*(focalPx()*Math.PI/180); // rotate right → patient moves left handled by sign of alpha
+function rawY(){
+  if(lockBaseY==null) return cv.height*.55;
+  if(!sensorOK||beta==null||anchorBeta==null) return lockBaseY;
+  const dPitch=(beta-anchorBeta)*Math.PI/180;  // pitch change since lock (rad)
+  return lockBaseY + Math.tan(dPitch)*focalPx();
 }
-function aX(){ return anchored?groundX():cv.width*.5; }
-function aY(){ return anchored?groundY():cv.height*.55; }
+// Smoothed accessors — exponential moving average kills gyro jitter
+function aX(){
+  if(!anchored) return cv.width*.5;
+  const tgt=rawX();
+  smX = smX==null ? tgt : smX + (tgt-smX)*0.18;
+  return smX;
+}
+function aY(){
+  if(!anchored) return cv.height*.55;
+  const tgt=rawY();
+  smY = smY==null ? tgt : smY + (tgt-smY)*0.18;
+  return smY;
+}
 function updDistF(){
   // steeper down-tilt (looking closer to feet) = patient appears bigger
   if(!sensorOK||beta==null){distF=1;return;}
@@ -315,7 +326,7 @@ function updDistF(){
   distF=0.7+0.6*Math.min(1.2,Math.max(.2,pitchDown));
 }
 function patientOnScreen(){
-  const y=aY(),m=getB()*1.6;
+  const y=aY(),m=getB()*1.8;
   return y>-m && y<cv.height+m;
 }
 
@@ -328,13 +339,12 @@ $('btn-learn').onclick=()=>openLesson();
 
 // CPR mode toggle
 $('mode-stand').onclick=()=>setMode('stand');
-$('mode-kneel').onclick=()=>setMode('kneel');
 $('mode-body').onclick=()=>setMode('body');
 function setMode(m){
   cprMode=m;
-  kneelMode=(m==='kneel');
+  kneelMode=false;
   bodyMode=(m==='body');
-  ['stand','kneel','body'].forEach(k=>{
+  ['stand','body'].forEach(k=>{
     $('mode-'+k).classList.toggle('sel',k===m);
   });
 }
@@ -538,7 +548,19 @@ function initPose(){
 
 addEventListener('pointermove',e=>{demoX=e.clientX;demoY=e.clientY;},{passive:true});
 addEventListener('pointerdown',e=>{demoX=e.clientX;demoY=e.clientY;
-  if(demo&&phase==='cpr')registerCompression();},{passive:true});
+  if(demo&&phase==='cpr')registerCompression();
+  if(phase==='pickspot') tapPickSpot(e.clientX,e.clientY);
+},{passive:true});
+
+function tapPickSpot(x,y){
+  // find nearest dot within range
+  let best=null,bd=1e9;
+  for(const d of floorDots){
+    const dist=Math.hypot(x-d.x,y-d.y);
+    if(dist<bd){bd=dist;best=d;}
+  }
+  if(best && bd<70) placeAt(best.x,best.y);
+}
 
 function ptr(){
   if(h1&&h2&&clasped)return{x:(h1.x+h2.x)/2,y:(h1.y+h2.y)/2,real:true};
@@ -594,8 +616,8 @@ function scanLogic(){
     if(!okAngle)
       setMsg(beta<FLOOR_BETA_MIN?'📐 เอียงกล้องลงอีก — ชี้ลงพื้น':'📐 ยกกล้องขึ้นนิดนึง',
         `มุมเครื่อง: ${Math.round(beta)}° (ต้องการ ${FLOOR_BETA_MIN}–${FLOOR_BETA_MAX}°)`);
-    else if(!steady)setMsg('✋ ถือนิ่งๆ','กำลังล็อคตำแหน่งพื้น…');
-    else setMsg('🔍 กำลังสแกนพื้น…','ถือค้างไว้');
+    else if(!steady)setMsg('✋ ถือนิ่งๆ','กำลังสแกนหาพื้น…');
+    else setMsg('🔍 กำลังสแกนพื้น…','ถือค้างไว้สักครู่');
   }
   if(okAngle&&steady)scanAccum+=dt;
   else scanAccum=Math.max(0,scanAccum-dt*1.5);
@@ -603,13 +625,48 @@ function scanLogic(){
 }
 
 function finishScan(){
+  // scan confirmed a usable floor → show candidate dots to pick from
+  phase='pickspot';
+  genFloorDots();
+  beep(880,90);
+  if(navigator.vibrate)navigator.vibrate(30);
+  setMsg('👆 แตะจุดบนพื้นเพื่อวางผู้ป่วย','เลือกจุดที่พื้นโล่ง');
+}
+
+// candidate floor anchor points (in screen space, projected along the ground)
+let floorDots=[], lockedSpot=null;
+function genFloorDots(){
+  floorDots=[];
+  const w=cv.width,h=cv.height;
+  // lay a small perspective grid of candidate points on the lower/centre area
+  const rows=[0.50,0.62,0.74], colsByRow=[3,4,5];
+  rows.forEach((ry,ri)=>{
+    const n=colsByRow[ri], y=h*ry;
+    for(let i=0;i<n;i++){
+      const t=(i+0.5)/n;
+      const spread=0.34+ri*0.12;       // wider as it comes closer
+      const x=w*(0.5+(t-0.5)*spread*2);
+      floorDots.push({x,y,bx:x,by:y,seed:Math.random()*6.28});
+    }
+  });
+}
+
+// smoothing state for the locked anchor
+let smX=null, smY=null;
+function placeAt(x,y){
+  lockedSpot={x,y};
+  // lock anchor at the tapped screen point; record gyro reference for drift comp
   anchored=true;
-  anchorA=alpha;       // lock yaw reference
+  anchorA=alpha;
+  anchorBeta=beta;
+  lockBaseX=x; lockBaseY=y;
+  smX=x; smY=y;
+  pX=x; pY=y;
   matStart=Date.now();matScale=0;
   phase='mat';
   beep(820,130);
   if(navigator.vibrate)navigator.vibrate([25,50,25]);
-  setMsg('👤 พบผู้ป่วยหมดสติ!','ผู้ป่วยถูกตรึงกับพื้น — ลองขยับกล้องดู');
+  setMsg('👤 พบผู้ป่วยหมดสติ!','ผู้ป่วยถูกตรึงกับพื้นแล้ว');
 }
 
 function afterMat(){
@@ -786,9 +843,9 @@ function startCPR(){
   strokeDepth=0;lastStrokeQ=0;
   setTag('SCENE 3 — CPR');setDots(2);
   postureEl.style.display='block';
-  if(kneelMode){
-    setMsg('🧎 วางมือถือพิงไว้ คุกเข่าข้างผู้ป่วย แล้วกดจริง',
-      'ประสานมือ กดลงให้ลึก (ดูแถบความลึกขวาจอ) จังหวะ 100-120/นาที');
+  if(bodyMode){
+    setMsg('🧍 คุกเข่าข้างผู้ป่วย ประสานมือ ก้มกดหน้าอก',
+      'กดลงให้ลึก (ดูแถบความลึกขวาจอ) จังหวะ 100-120/นาที');
   } else {
     setMsg('🤲 ประสานมือซ้อนกัน แล้วกดลง-ปล่อยขึ้น ให้สุด',
       'ต้องกดลงให้ลึกพอ (ดูแถบความลึกขวาจอ) จังหวะ 100-120/นาที');
@@ -798,18 +855,21 @@ function startCPR(){
 function cprMotion(w,h){
   const B=bodyMode?Math.min(w,h)*.34:getB();
   const p=ptr();
-  // body mode: chest at patient center (rotated body); else upper torso
-  const cx=aX(), cy=bodyMode? aY() : aY()+(-B*.40)*PERSP;
-  const zR=bodyMode?B*.7:B*.5;
+  // body is horizontal (rotated 90°): chest sits offset toward head side (screen X)
+  // body-local chest at Y=-0.40 → after rotate, horizontal offset on screen
+  const chOff=(-(-0.40))*B*PERSP;  // toward head
+  const cx=aX()+chOff*0.0+ B*0.0;  // keep near center; head offset small
+  const cy=aY();
+  const zR=bodyMode?B*.65:B*.5;
   inChest=false;
 
   if(demo){postureEl.className='good';postureEl.textContent='🎮 Demo — แตะจอ = ปั๊ม';}
-  else if(clasped){postureEl.className='good';postureEl.textContent=bodyMode?'🧍 ก้มกดหน้าอกแรงๆ!':kneelMode?'🧎 คุกเข่า กดลงให้ลึก!':'🤲 ท่าถูกต้อง ✓ ปั๊มขึ้น-ลงแรงๆ!';}
+  else if(clasped){postureEl.className='good';postureEl.textContent=bodyMode?'🧍 ก้มกดหน้าอกแรงๆ!':'🤲 ท่าถูกต้อง ✓ กดลง-ปล่อยขึ้นให้สุด!';}
   else if(h1&&h2){postureEl.className='';postureEl.textContent='🤲 เอามือมาประสานซ้อนกัน!';}
   else {postureEl.className='';postureEl.textContent='👀 ยกมือที่ประสานเข้ากล้อง';}
 
   if(p){
-    const dx=p.x-cx,dy=bodyMode?(p.y-cy):(p.y-cy)/PERSP;
+    const dx=p.x-cx,dy=p.y-cy;
     if(Math.hypot(dx,dy)<zR/0.7)inChest=true;
   }
 
@@ -1096,6 +1156,7 @@ function draw(){
   updDistF();
 
   if(phase==='scan'){scanLogic();drawScan(w,h);drawPointer();return;}
+  if(phase==='pickspot'){drawPickSpot(w,h);return;}
   if(phase==='bodysetup'){bodySetupLogic();drawBodySetup(w,h);drawPointer();return;}
   if(phase==='mat'&&matStart){
     const t=Math.min(1,(Date.now()-matStart)/750);
@@ -1158,10 +1219,61 @@ function drawOffscreenHint(w,h){
 // ═══════════════════════════════════════════════════════
 // SCAN VISUAL
 // ═══════════════════════════════════════════════════════
+function drawPickSpot(w,h){
+  const t=Date.now();
+  // detected-floor wash
+  const fg=G.createLinearGradient(0,h*.4,0,h);
+  fg.addColorStop(0,'rgba(0,229,160,0)');
+  fg.addColorStop(1,'rgba(0,229,160,.06)');
+  G.fillStyle=fg;G.fillRect(0,h*.4,w,h*.6);
+
+  const p=ptr();
+  let near=null,nd=70;
+  if(p){ for(const d of floorDots){const dist=Math.hypot(p.x-d.x,p.y-d.y);if(dist<nd){nd=dist;near=d;}} }
+
+  floorDots.forEach((d,i)=>{
+    const ph=(Math.sin(t/600+d.seed)+1)*.5;
+    const isNear=near===d;
+    const r=isNear?16:9+ph*2;
+    // outer ring
+    G.beginPath();G.ellipse(d.x,d.y,r,r*0.4,0,0,Math.PI*2);
+    G.strokeStyle=isNear?`rgba(0,229,160,.9)`:`rgba(0,229,160,${.35+ph*.25})`;
+    G.lineWidth=isNear?2.5:1.5;G.stroke();
+    // center dot
+    G.beginPath();G.ellipse(d.x,d.y,3,1.6,0,0,Math.PI*2);
+    G.fillStyle=`rgba(0,229,160,${.6+ph*.3})`;G.fill();
+    // ripple when near
+    if(isNear){
+      const rip=((t/700)%1);
+      G.beginPath();G.ellipse(d.x,d.y,r+rip*22,(r+rip*22)*0.4,0,0,Math.PI*2);
+      G.strokeStyle=`rgba(0,229,160,${(1-rip)*.5})`;G.lineWidth=1.5;G.stroke();
+    }
+  });
+
+  // hint label near pointer
+  if(p){
+    G.font='bold 12px var(--thai),system-ui';G.textAlign='center';
+    G.fillStyle='rgba(255,255,255,.9)';
+    G.fillText(near?'แตะเพื่อวางตรงนี้':'เลื่อนมือไปที่จุดสีเขียว',p.x,p.y-26);
+  }
+  // hands-free: dwell over a dot to place it
+  if(near){
+    if(dwellTarget!=='spot'){dwellTarget='spot';dwellStart=t;}
+    dwellProg=Math.min(1,(t-dwellStart)/DWELL_MS);
+    // dwell ring
+    G.beginPath();
+    G.arc(near.x,near.y,22,-Math.PI/2,-Math.PI/2+dwellProg*Math.PI*2);
+    G.strokeStyle='#00E5A0';G.lineWidth=3;G.lineCap='round';G.stroke();G.lineCap='butt';
+    if(dwellProg>=1){dwellTarget=null;dwellProg=0;placeAt(near.x,near.y);}
+  } else { if(dwellTarget==='spot'){dwellTarget=null;dwellProg=0;} }
+
+  drawPointer();
+}
+
 function drawScan(w,h){
   const cx=w*.5,t=Date.now();
-  // วงสแกนวางบนตำแหน่งพื้นจริง (ground-projected)
-  const cy=Math.max(h*.3,Math.min(h*.85,groundY()));
+  // scan rings sit in the lower-centre where the floor would be
+  const cy=h*.6;
   const prog=Math.min(1,scanAccum/SCAN_NEED);
   const Rx=Math.min(w,h)*.3,Ry=Rx*PERSP*.7;
   const valid=demo||!sensorOK||
@@ -1275,7 +1387,7 @@ function drawPatient(w,h){
   const persp=bodyMode?0.62:PERSP;   // less squash in body mode (side view)
   G.save();
   G.translate(AXX,AYY);
-  if(bodyMode) G.rotate(Math.PI/2);  // นอนขวาง: rotate 90° → head to the side
+  G.rotate(Math.PI/2);  // นอนขวาง: หุ่นนอนแนวนอนทุกโหมด
   if(matScale<1){
     const burst=1-matScale;
     for(let i=0;i<8;i++){
@@ -1286,6 +1398,9 @@ function drawPatient(w,h){
   }
   G.scale(matScale,matScale);
   G.scale(1,persp);
+  // shift body so the CHEST (body-Y ≈ -0.40) sits at the anchor origin,
+  // aligning the illustration's chest with the CPR target ring
+  G.translate(0, 0.40*B);
 
   // soft ground shadow (radial, feathered)
   const sh=G.createRadialGradient(0,B*.05,0,0,B*.05,B*1.5);
@@ -1413,9 +1528,9 @@ function drawPatient(w,h){
 
 function drawChestTarget(B,dp){
   const bm=bodyMode;
-  // B already includes matScale in both modes at call site
-  const Rx=bm?B*.42:B*matScale*.34, Ry=bm?Rx:Rx*PERSP;
-  const cx=aX(), cy=bm? aY() : aY()+(-B*.40+dp)*PERSP*matScale;
+  // horizontal body in all modes → round target at patient center
+  const Rx=bm?B*.42:B*matScale*.40, Ry=Rx;
+  const cx=aX(), cy=aY();
   const p=(Math.sin(Date.now()/430)+1)*.5;
   const act=inChest&&(clasped||demo);
   const [r,g,b]=act?[0,255,136]:[255,179,0];
